@@ -722,7 +722,11 @@ int ReadSidFile(Barnyard2Config *bc)
 	    if(*index == '#')
 	    {
 		index++;
-		if( strncasecmp(index,SIDMAPV2STRING,strlen(SIDMAPV2STRING)) == 0)
+		if(strncasecmp(index,SIDMAPV1STRING,strlen(SIDMAPV1STRING)) == 0)
+		{
+		    bc->sidmap_version=SIDMAPV1;
+		}
+		else if( strncasecmp(index,SIDMAPV2STRING,strlen(SIDMAPV2STRING)) == 0)
 		{
 		    bc->sidmap_version=SIDMAPV2;
 		    continue;
