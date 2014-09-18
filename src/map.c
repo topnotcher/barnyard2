@@ -477,7 +477,7 @@ int ReadClassificationFile(Barnyard2Config *bc)
 	return 1;
     }
     
-    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
+    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", bc->class_file););
     
     if((fd = fopen(bc->class_file, "r")) == NULL)
     {
@@ -722,17 +722,20 @@ int ReadSidFile(Barnyard2Config *bc)
 	    if(*index == '#')
 	    {
 		index++;
-		if( strncasecmp(index,SIDMAPV2STRING,strlen(SIDMAPV2STRING)) == 0)
+		if(strncasecmp(index,SIDMAPV1STRING,strlen(SIDMAPV1STRING)) == 0)
+		{
+		    bc->sidmap_version=SIDMAPV1;
+		}
+		else if( strncasecmp(index,SIDMAPV2STRING,strlen(SIDMAPV2STRING)) == 0)
 		{
 		    bc->sidmap_version=SIDMAPV2;
+		    continue;
 		}
 	    }
 	    else
 	    {
 		bc->sidmap_version=SIDMAPV1;
 	    }
-	    
-	    continue;
 	}
 
 	/* if it's not a comment or a <CR>, send it to the parser */
