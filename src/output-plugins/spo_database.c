@@ -3512,21 +3512,32 @@ int Insert(char * query, DatabaseData * data,u_int32_t inTransac)
 	case CR_COMMANDS_OUT_OF_SYNC:
 	case CR_SERVER_GONE_ERROR:
 	case CR_UNKNOWN_ERROR:
-	default:
+	default: ;
 	    /* XXX */
 	    /* Could lead to some corruption lets exit nicely .. */
 	    /* Since this model of the database incluse alot of atomic queries .....*/
-	    if( (mysql_errno(data->m_sock)))
-	    {
+		unsigned int errno = mysql_errno(data->m_sock);
+
+		if (errno) switch (errno) {
+
+		/**
+		 * Add some fault tolerance in the case of lock wait timeouts
+		 */
+		case ER_LOCK_WAIT_TIMEOUT:
+			LogMessage("Lock wait timeout exceeded: '%s'; rolling back transaction.", query);
+			
+			if (checkTransactionState(&data->dbRH[data->dbtype_id]))
+				RollbackTransaction(data);
+
+			break;
+
+		default:	
+			FatalError("database mysql_error: %s\n\tSQL=[%s]\n",
+				mysql_error(data->m_sock),query);
 		
-		FatalError("database mysql_error: %s\n\tSQL=[%s]\n",
-			   mysql_error(data->m_sock),query);
-		
-	    }
-	    else
-	    {
-		/* XXX */
-		return 1;
+	    } else {
+			/* XXX */
+			return 1;
 	    }
 	    break;
 	}

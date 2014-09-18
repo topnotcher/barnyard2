@@ -71,6 +71,7 @@
 #  include <windows.h>
 # endif
 # include <mysql.h>
+# include <mysqld_error.h>
 # include <errmsg.h>
 #endif
 
