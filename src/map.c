@@ -798,10 +798,8 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data)
 	
         for(i = 0; i<num_toks; i++)
         { 
-            strtrim(toks[i]);
             strip(toks[i]);
-            idx = toks[i];
-            while(*idx == ' ') idx++;
+            idx = strtrim(toks[i]);
 
 	    if( (idx == NULL) ||
 		(strlen(idx) == 0))

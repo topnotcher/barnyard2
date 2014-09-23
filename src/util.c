@@ -381,22 +381,24 @@ char *copy_argv(char **argv)
     return buf;
 }
 
-void strtrim(char *str)
+char * strtrim(char *str)
 {
-    char *end;
+	char *end;
 
-     // trim leading space
-     while(isspace(*str)) str++;
-    
-     if(*str == 0)  // All spaces?
-         return;
-      
-     // trim trailing space
-     end = str + strlen(str) - 1;
-     while(end > str && isspace(*end)) end--;
-     
-     // write new null terminator
-     *(end+1) = 0;
+	// trim leading space
+	while(isspace(*str)) str++;
+
+	if (*str != '\0') {
+
+		// trim trailing space
+		end = str + strlen(str) - 1;
+		while(end > str && isspace(*end)) end--;
+
+		// write new null terminator
+		*(end+1) = 0;
+	}
+
+	return str;
 }
 
 /****************************************************************************
