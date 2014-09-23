@@ -1426,10 +1426,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     u_int32_t sigMsgLen = 0;
     u_int8_t reuseSigMsg = 0;
 
-    if( (data == NULL)   ||
-        (event == NULL)  ||
-        (psig_id == NULL))
-    {
+    if( (data == NULL) || (event == NULL) || (psig_id == NULL)) {
         /* XXX */
         return 1;
     }
@@ -1448,13 +1445,9 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
        This is now only needed for backward compatible with old sid-msg.map file.
        new version has gid || sid || revision || msg || etc.. 
     */
-    if( BcSidMapVersion() == SIDMAPV1)
-    {
-	if (gid == 3)
-	{
-	    gid = 1;
+	if( BcSidMapVersion() == SIDMAPV1 && gid == 3) {
+		gid = 1;
 	}
-    }
     
 
     /* NOTE: elz 
@@ -1484,212 +1477,194 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 			    gid,
 			    sid));
 #endif
-    
-    if( (sigMatchCount = cacheEventSignatureLookup(data->mc.cacheSignatureHead,
-						   data->mc.plgSigCompare,
-						   gid,sid)) > 0 )
-	for(x = 0 ; x < sigMatchCount ; x++)
-	{
-	    if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) &&
-		(data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == db_classification_id) && 
-		(data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == priority))
-	    {
-		/* Added for bugcheck */
-		assert( data->mc.plgSigCompare[x].cacheSigObj->obj.db_id != 0);
-		*psig_id = data->mc.plgSigCompare[x].cacheSigObj->obj.db_id;
-		return 0;
-	    }
-	    
-	    /* If we have an "uninitialized signature save it */
-	    if( ( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0) || 
-		  (data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)) ||
-		
-		/* So we have a signature that was inserted, probably a preprocessor signature,
-		   but it has probably never been logged before lets set it as a temporary unassigned signature */
-		((data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) && 
-		 ( data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == 0  ||
-		   data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == 0)))
-	    {
-		memcpy(&unInitSig,data->mc.plgSigCompare[x].cacheSigObj,sizeof(cacheSignatureObj));
-		
-		/* 
-		** We assume that we have the same signature, but with a smaller revision
-		** set the unInitSig db_id to 0 for post processing if we do not find a matching 
-		** signature, and get the lastest revision
-		*/
-		if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision) ||
-		    (data->mc.plgSigCompare[x].cacheSigObj->obj.rev > unInitSig.obj.rev))
-		{
-		    unInitSig.obj.db_id = 0;
-		}
-	    }
-	}
-	    
-    if(BcSidMapVersion() == SIDMAPV1)
-    {
-	if(unInitSig.obj.db_id != 0)
-	{
-#if DEBUG
-	    DEBUG_WRAP(DebugMessage(DB_DEBUG,
-				    "[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched event criteria.\n" 
-				    "Updating database [db_sig_id: %u] FROM  [rev: %u] classification [ %u ] priority [%u] "
-				    "                                  TO    [rev: %u] classification [ %u ] priority [%u]\n",
-				    __FUNCTION__,
-				    sigMatchCount,
-				    gid,
-				    sid,
-				    unInitSig.obj.db_id,
-				    unInitSig.obj.rev,unInitSig.obj.class_id,unInitSig.obj.priority_id,
-				    revision,db_classification_id,priority));
-#endif
-	    
-	    unInitSig.obj.rev = revision;
-	    unInitSig.obj.class_id = db_classification_id;
-	    unInitSig.obj.priority_id = priority;
-	    
-	    if( (dbSignatureInformationUpdate(data,&unInitSig)))
-	    {
-		
-		LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
-			   "[gid :%u] [sid: %u] [upd_rev: %u] [upd class: %u] [upd pri %u]\n",
-			   __FUNCTION__,
-			   __LINE__,
-			   gid,			\
-			   sid,
-			   revision,
-			   db_classification_id,
-			   priority);
-		return 1;
-	    }
-	    
-	    assert( unInitSig.obj.db_id != 0);
-	
-	    *psig_id = unInitSig.obj.db_id;
-	    return 0;
-	}
-    }
+	sigMatchCount = cacheEventSignatureLookup(data->mc.cacheSignatureHead,data->mc.plgSigCompare, gid,sid);
+	if ( sigMatchCount > 0 ) {
+		for(x = 0 ; x < sigMatchCount ; x++) {
+			if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) &&
+					(data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == db_classification_id) && 
+					(data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == priority))
+			{
+				/* Added for bugcheck */
+				assert( data->mc.plgSigCompare[x].cacheSigObj->obj.db_id != 0);
+				*psig_id = data->mc.plgSigCompare[x].cacheSigObj->obj.db_id;
+				return 0;
+			}
 
-    /* 
-       To avoid possible collision with an older barnyard process or 
-       avoid signature insertion race condition we will look in the 
-       database if the signature exist, if it does, we will insert it in 
-       cache else we will insert in db and cache 
-    */
-    
-    sigInsertObj.sid = sid;
-    sigInsertObj.gid = gid;
-    sigInsertObj.rev = revision;
-    sigInsertObj.class_id = db_classification_id;
-    sigInsertObj.priority_id = priority;
-    
-    if( SignatureLookupDatabase(data,&sigInsertObj))
-    {
-	if(unInitSig.obj.sid != 0 && unInitSig.obj.gid != 0)
-	{
-	    sigMsgLen = strlen(unInitSig.obj.message);
-	    
-	    if( (sigMsgLen > 1) && 
-		(sigMsgLen < SIG_MSG_LEN))
-	    {
-		reuseSigMsg = 1;
-	    }
+			/* If we have an "uninitialized signature save it */
+			if( ( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0) || 
+						(data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)) ||
+
+					/* So we have a signature that was inserted, probably a preprocessor signature,
+					   but it has probably never been logged before lets set it as a temporary unassigned signature */
+					((data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) && 
+					 ( data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == 0  ||
+					   data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == 0)))
+			{
+				memcpy(&unInitSig,data->mc.plgSigCompare[x].cacheSigObj,sizeof(cacheSignatureObj));
+
+				/* 
+				 ** We assume that we have the same signature, but with a smaller revision
+				 ** set the unInitSig db_id to 0 for post processing if we do not find a matching 
+				 ** signature, and get the lastest revision
+				 */
+				if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision) ||
+						(data->mc.plgSigCompare[x].cacheSigObj->obj.rev > unInitSig.obj.rev))
+				{
+					unInitSig.obj.db_id = 0;
+				}
+			}
+		}
 	}
-	
-	if(reuseSigMsg)
-	{
-	    /* The signature was not found we will have to insert it */
-	    LogMessage("INFO [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u] Signature Message -> \"[%s]\"\n"
-		       "\t was not found in barnyard2 signature cache, this could mean its is the first time the signature is processed, and will be inserted\n"
-		       "\t in the database with the above information, this message should only be printed once for each signature that is not  present in the database\n"
-		       "\t The new inserted signature will not have its information present in the sig_reference table,it should be present on restart\n"
-		       "\t if the information is present in the sid-msg.map file. \n"
-		       "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
-		       __FUNCTION__,
-		       ntohl(((Unified2EventCommon *)event)->event_id),
-		       gid,
-		       sid,
-		       revision,
-		       db_classification_id,
-		       priority,
-		       unInitSig.obj.message);
 	    
-	    if( SnortSnprintf(sigInsertObj.message,SIG_MSG_LEN,"%s",
-			      unInitSig.obj.message))
-	    {
-		/* XXX */
-		return 1;
-	    }
-	}
-    	else
-	{
-	    /* The signature does not exist we will have to insert it */
-	    LogMessage("INFO [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u]\n"
-		       "\t was not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
-		       "\t To prevent this warning, make sure that your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the spool file.\n"
-		       "\t The new inserted signature will not have its information present in the sig_reference table. \n"
-		       "\t Note that the message inserted in the signature table will be snort default message \"Snort Alert [gid:sid:revision]\" \n"
-		       "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
-		       __FUNCTION__,
-		       ntohl(((Unified2EventCommon *)event)->event_id),
-		       gid,
-		       sid,
-		       revision,
-		       db_classification_id,
-		       priority);
-	    
-	    
-	    if( SnortSnprintf(sigInsertObj.message,SIG_MSG_LEN,"Snort Alert [%u:%u:%u]",
-			      gid,sid,revision))
-	    {
-		/* XXX */
-		return 1;
-	    }
-	}
-	
-	if( (SignatureCacheInsertObj(&sigInsertObj,&data->mc,0)))
-	{
-	    /* XXX */
-	    LogMessage("[%s()]: ERROR inserting object in the cache list .... \n",
-		       __FUNCTION__);
-	    goto func_err;
-	}
-	
+	if(BcSidMapVersion() == SIDMAPV1) {
+		if(unInitSig.obj.db_id != 0) {
+#if DEBUG
+			DEBUG_WRAP(DebugMessage(DB_DEBUG,
+						"[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched event criteria.\n" 
+						"Updating database [db_sig_id: %u] FROM  [rev: %u] classification [ %u ] priority [%u] "
+						"                                  TO    [rev: %u] classification [ %u ] priority [%u]\n",
+						__FUNCTION__,
+						sigMatchCount,
+						gid,
+						sid,
+						unInitSig.obj.db_id,
+						unInitSig.obj.rev,unInitSig.obj.class_id,unInitSig.obj.priority_id,
+						revision,db_classification_id,priority)
+			);
+#endif
+
+			unInitSig.obj.rev = revision;
+			unInitSig.obj.class_id = db_classification_id;
+			unInitSig.obj.priority_id = priority;
+
+			if( (dbSignatureInformationUpdate(data,&unInitSig))) {
+
+				LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
+						"[gid :%u] [sid: %u] [upd_rev: %u] [upd class: %u] [upd pri %u]\n",
+						__FUNCTION__,
+						__LINE__,
+						gid,			\
+						sid,
+						revision,
+						db_classification_id,
+						priority
+				);
+				return 1;
+			}
+
+			assert( unInitSig.obj.db_id != 0);
+
+			*psig_id = unInitSig.obj.db_id;
+			return 0;
+		}
+	} // SIDMAPV1
+
 	/* 
-	   There is some little overhead traversing the list once 
-	   the insertion is done on the HEAD so
-	   unless you run 1M rules and still there it should 
-	   complete in just a few more jiffies, also its better this way
-	   than to query the database everytime isin't.
-	*/    
-	if(SignaturePopulateDatabase(data,data->mc.cacheSignatureHead,1))
-	{
-	    /* XXX */
-	    LogMessage("[%s()]: ERROR inserting new signature \n",
-		       __FUNCTION__);
-	    goto func_err;
+	   To avoid possible collision with an older barnyard process or 
+	   avoid signature insertion race condition we will look in the 
+	   database if the signature exist, if it does, we will insert it in 
+	   cache else we will insert in db and cache 
+	   */
+
+	sigInsertObj.sid = sid;
+	sigInsertObj.gid = gid;
+	sigInsertObj.rev = revision;
+	sigInsertObj.class_id = db_classification_id;
+	sigInsertObj.priority_id = priority;
+
+	if( SignatureLookupDatabase(data,&sigInsertObj)) {
+		if(unInitSig.obj.sid != 0 && unInitSig.obj.gid != 0) {
+			sigMsgLen = strlen(unInitSig.obj.message);
+
+			if( (sigMsgLen > 1) && (sigMsgLen < SIG_MSG_LEN)) {
+				reuseSigMsg = 1;
+			}
+		}
+
+		if(reuseSigMsg) {
+			/* The signature was not found we will have to insert it */
+			LogMessage("INFO [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u] Signature Message -> \"[%s]\"\n"
+					"\t was not found in barnyard2 signature cache, this could mean its is the first time the signature is processed, and will be inserted\n"
+					"\t in the database with the above information, this message should only be printed once for each signature that is not  present in the database\n"
+					"\t The new inserted signature will not have its information present in the sig_reference table,it should be present on restart\n"
+					"\t if the information is present in the sid-msg.map file. \n"
+					"\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
+					__FUNCTION__,
+					ntohl(((Unified2EventCommon *)event)->event_id),
+					gid,
+					sid,
+					revision,
+					db_classification_id,
+					priority,
+					unInitSig.obj.message);
+
+			if( SnortSnprintf(sigInsertObj.message,SIG_MSG_LEN,"%s", unInitSig.obj.message)) {
+				/* XXX */
+				return 1;
+			}
+		} else {
+			/* The signature does not exist we will have to insert it */
+			LogMessage("INFO [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u]\n"
+					"\t was not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
+					"\t To prevent this warning, make sure that your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the spool file.\n"
+					"\t The new inserted signature will not have its information present in the sig_reference table. \n"
+					"\t Note that the message inserted in the signature table will be snort default message \"Snort Alert [gid:sid:revision]\" \n"
+					"\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
+					__FUNCTION__,
+					ntohl(((Unified2EventCommon *)event)->event_id),
+						gid,
+						sid,
+						revision,
+						db_classification_id,
+						priority
+					);
+
+
+			if( SnortSnprintf(sigInsertObj.message,SIG_MSG_LEN,"Snort Alert [%u:%u:%u]", gid,sid,revision)) {
+				/* XXX */
+				return 1;
+			}
+		}
+
+		if( (SignatureCacheInsertObj(&sigInsertObj,&data->mc,0))) {
+			/* XXX */
+			LogMessage("[%s()]: ERROR inserting object in the cache list .... \n",
+					__FUNCTION__);
+			goto func_err;
+		}
+
+		/* 
+		   There is some little overhead traversing the list once 
+		   the insertion is done on the HEAD so
+		   unless you run 1M rules and still there it should 
+		   complete in just a few more jiffies, also its better this way
+		   than to query the database everytime isin't.
+		   */    
+		if(SignaturePopulateDatabase(data,data->mc.cacheSignatureHead,1)) {
+			/* XXX */
+			LogMessage("[%s()]: ERROR inserting new signature \n",
+					__FUNCTION__);
+			goto func_err;
+		}
+	} else {
+		if( (SignatureCacheInsertObj(&sigInsertObj,&data->mc,1))) {
+			/* XXX */
+			LogMessage("[%s()]: ERROR inserting object in the cache list .... \n",
+					__FUNCTION__);
+			goto func_err;
+		}
+
 	}
-    }
-    else
-    {
-	if( (SignatureCacheInsertObj(&sigInsertObj,&data->mc,1)))
-        {
-            /* XXX */
-            LogMessage("[%s()]: ERROR inserting object in the cache list .... \n",
-                       __FUNCTION__);
-            goto func_err;
-        }
-	
-    }
-    
-    /* Added for bugcheck */
-    assert( data->mc.cacheSignatureHead->obj.db_id != 0);
-    
-    *psig_id = data->mc.cacheSignatureHead->obj.db_id;
-    return 0;
-    
-    
+
+	/* Added for bugcheck */
+	assert( data->mc.cacheSignatureHead->obj.db_id != 0);
+
+	*psig_id = data->mc.cacheSignatureHead->obj.db_id;
+	return 0;
+
+
 func_err:
-    return 1;
+	return 1;
 }
 
 
