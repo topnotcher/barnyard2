@@ -279,17 +279,6 @@ typedef struct _cacheSignatureObj
  * SIGNATURE OBJ
  ------------------------------------------ */
 
-
-/* ------------------------------------------
- * Used for lookup in case multiple signature 
- * with same sid:gid couple exist but have different
- * rev,class and priority 
- ------------------------------------------ */
-typedef struct _PluginSignatureObj
-{
-    cacheSignatureObj *cacheSigObj;
-
-} plgSignatureObj;
 /* ------------------------------------------
  * Used for lookup in case multiple signature 
  * with same sid:gid couple exist but have different
@@ -305,8 +294,6 @@ typedef struct _masterCache
     cacheSignatureObj *cacheSignatureHead;
     cacheSystemObj *cacheSystemHead;
     cacheSignatureReferenceObj *cacheSigReferenceHead;
-    plgSignatureObj plgSigCompare[MAX_SIGLOOKUP]; /* Used by spo_database when querying the cache for signature match */
-    
 } MasterCache;
 /* ------------------------------------------
    Main cache entry point (used by DatabaseData->mc)
@@ -604,13 +591,11 @@ void DatabaseCleanInsert(DatabaseData *data);
 u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data);
 u_int32_t CacheSynchronize(DatabaseData *data);
 u_int32_t cacheEventClassificationLookup(cacheClassificationObj *iHead,u_int32_t iClass_id);
-u_int32_t cacheEventSignatureLookup(cacheSignatureObj *iHead,
-                                    plgSignatureObj *sigContainer,
-                                    u_int32_t gid,
-                                    u_int32_t sid);
-u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache,u_int32_t from);
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac);
+u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache);
+u_int32_t SignatureLookupDbCache(cacheSignatureObj * iHead, dbSignatureObj * lookup);
+u_int32_t SignaturePopulateDatabase(DatabaseData  *data,dbSignatureObj *sig,int inTransac);
 u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj);
+u_int32_t SignatureLookup(DatabaseData * data, dbSignatureObj * lookup);
 void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag);
 
 u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH);

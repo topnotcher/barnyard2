@@ -32,12 +32,6 @@
 #include "output-plugins/spo_database.h"
 #include "output-plugins/spo_database_cache.h"
 
-
-/* LOOKUP FUNCTIONS */
-cacheSignatureObj *cacheGetSignatureNodeUsingDBid(cacheSignatureObj *iHead,u_int32_t lookupId);
-cacheReferenceObj *cacheGetReferenceNodeUsingDBid(cacheSystemObj *iHead,u_int32_t lookupId);
-
-u_int32_t cacheSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead);
 u_int32_t cacheClassificationLookup(dbClassificationObj *iLookup,cacheClassificationObj *iHead);
 u_int32_t cacheSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead,cacheSystemObj **rcacheSystemObj);
 u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,cacheReferenceObj **retRefLookupNode);
@@ -45,7 +39,6 @@ u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,
 u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSignatureReferenceObj *iHead,cacheSignatureReferenceObj **retSigRef,u_int32_t refCondCheck);
 u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead);
 u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead);
-u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead);
 u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificationObj *iHead);
 /* LOOKUP FUNCTIONS */
 
@@ -58,10 +51,9 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 /* CLASSIFICATION FUNCTIONS */
 
 /* SIGNATURE FUNCTIONS */
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac);
-u_int32_t SignatureCacheUpdateDBid(dbSignatureObj *iDBList,u_int32_t array_length,cacheSignatureObj **cacheHead);
-u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,u_int32_t *array_length);
-u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cacheHead);
+static u_int32_t SignatureLookupCache(SigNode * cacheHead, dbSignatureObj * lookup);
+static u_int32_t dbSignatureObjEquals(dbSignatureObj const * const sig1,dbSignatureObj const * const sig2);
+
 /* SIGNATURE FUNCTIONS */
 
 /* REFERENCE FUNCTIONS */
@@ -88,7 +80,6 @@ u_int32_t SignatureReferenceCacheUpdateDBid(dbSignatureReferenceObj *iDBList,
 
 u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureReferenceObj *cacheHead);
 u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cacheHead,cacheSignatureObj *cacheSigHead);
-u_int32_t SignatureReferencePreGenerate(cacheSignatureObj *iHead);
 /* SIGNATURE REFERENCE FUNCTIONS */
 
 
@@ -192,130 +183,41 @@ u_int32_t cacheSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSi
 }
 
 
-u_int32_t cacheEventSignatureLookup(cacheSignatureObj *iHead,
-				    plgSignatureObj *sigContainer,
-				    u_int32_t gid,
-				    u_int32_t sid)
-{
-    u_int32_t matchCount = 0;
-    
-    if( (iHead == NULL) ||
-	(sigContainer == NULL))
-    {
-	return 0;
-    }
-    
-    /* Clean up */
-    memset(sigContainer,'\0',(sizeof(plgSignatureObj) * MAX_SIGLOOKUP));
-    
-    while(iHead != NULL)
-    {
-	if( (iHead->obj.sid == sid) &&
-	    (iHead->obj.gid == gid))
-	{
-	    if(matchCount < MAX_SIGLOOKUP)
-	    {
-		sigContainer[matchCount].cacheSigObj = iHead;
-		matchCount++;
-	    }
-	    else
-	    {
-		/* We reached maximum count for possible reference matching objects... */
-		return matchCount;
-	    }
-	}
-	
-	iHead = iHead->next;
-    }
-    
-    return matchCount;
-}
-
-
-
-/** 
- * Lookup for dbSignatureObj in cacheReferenceObj 
- * @note compare message,sid,gid and revision.
- *
- * @param iLookup 
- * @param iHead 
- * 
- * @return 
- * 0 NOT FOUND
- * 1 FOUND
- */
-u_int32_t cacheSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
-{
-    
-    if( (iLookup == NULL))
-    {
-        /* XXX */
-        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
-                   __FUNCTION__,
-                   iLookup,
-                   iHead);
-    }
-
-    while(iHead != NULL)
-    {
-	
-	if( (strncasecmp(iLookup->message,iHead->obj.message,
-			 glsl(iLookup->message,iHead->obj.message)) == 0) &&
-            (iLookup->sid == iHead->obj.sid) &&
-            (iLookup->gid == iHead->obj.gid) &&
-            (iLookup->rev == iHead->obj.rev))
-        {
-            /* Found */
-            return 1;
-        }
-	
-        iHead = iHead->next;
-    }
-
-    return 0;
-    
-}
-
-
 /**
- * Lookup for dbSignatureObj in cacheReferenceObj and if a match is found it will return the object for further comparaisons.
- * @note compare message,sid,gid and revision.
- *
- * @param iLookup
- * @param iHead
- *
- * @return
- * NULL           NOT FOUND
- * Valid POINTER  FOUND
+ * @TODO
  */
-cacheSignatureObj * cacheSignatureGetObject(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
-{
+static u_int32_t dbSignatureObjEquals(dbSignatureObj const * const sig1,dbSignatureObj const * const sig2) {
+	if (sig1->sid != sig2->sid)
+		return 0;
+	else if (sig1->gid != sig2->gid)
+		return 0;
+	else if (sig1->rev != sig2->rev)
+		return 0;
+	else if (sig1->priority_id != sig2->priority_id)
+		return 0;
+	else if (sig1->class_id != sig2->class_id)
+		return 0;
 
-    if( (iLookup == NULL))
-    {
-        /* XXX */
-        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
-                   __FUNCTION__,
-                   iLookup,
-                   iHead);
-    }
+	return 1;
+}
+/**
+ * @TODO: this would be easier if we searched for a struct.
+ */
+u_int32_t SignatureLookupDbCache(cacheSignatureObj * iHead, dbSignatureObj * lookup) { 
+	if (iHead == NULL || lookup == NULL)
+		return 1;
 
-    while(iHead != NULL)
-    {
-	if( (strncasecmp(iLookup->message,iHead->obj.message,
-			 glsl(iLookup->message,iHead->obj.message)) == 0) &&
-            (iLookup->sid == iHead->obj.sid) &&
-            (iLookup->gid == iHead->obj.gid) &&
-            (iLookup->rev == iHead->obj.rev))
-        {
-            /* Found */
-            return iHead;
-        }
-	
-        iHead = iHead->next;
-    }
+	cacheSignatureObj const * cur = iHead;
+	while (cur != NULL) {
+		if (dbSignatureObjEquals(&cur->obj, lookup)) {
+			lookup->db_id = cur->obj.db_id;
+			return 0;
+		}
 
-    return NULL;
+		cur = cur->next;
+	}
+
+	return 1;
 }
 
 u_int32_t cacheEventClassificationLookup(cacheClassificationObj *iHead,u_int32_t iClass_id)
@@ -630,96 +532,6 @@ u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead)
 
 
 /** 
- * Lookup for dbSignatureObj in cacheSignatureObj 
- * @note compare message,sid,gid and revision.
- * @note Used in context db->internaCache lookup (if found remove CACHE_INTERNAL_ONLY and set CACHE_BOTH flag)
- *
- * @param iLookup 
- * @param iHead 
- * 
- * @return 
- * 0 NOT FOUND
- * 1 FOUND
- */
-u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
-{
-    
-    if( (iLookup == NULL))
-    {
-        /* XXX */
-        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
-                   __FUNCTION__,
-                   iLookup,
-                   iHead);
-    }
-    
-    if(iHead == NULL)
-    {
-        return 0;
-    }
-    
-    while(iHead != NULL)
-    {
-	if( (strncasecmp(iLookup->message,iHead->obj.message,
-			 glsl(iLookup->message,iHead->obj.message)) == 0) &&
-	    (iLookup->sid == iHead->obj.sid) &&
-	    (iLookup->gid == iHead->obj.gid))
-        {
-	    /* Found */
-   
-	    /* 
-	       If the object in current list has a revision of 0, 
-	       and that a match is found for gid/sid (we are probably being called from the initialization 
-	       (should) and the current node is 
-	       initialized with information from the files only, and probably the database has cleaner information)
-	       set the revision to the revision of the lookup node, 
-	       but if the revision is not set to 0 and does
-	       not match, continue searching.
-	    */
-	    
-	    if(iHead->obj.rev == 0)
-	    {
-		iHead->obj.rev = iLookup->rev;
-	    }
-	    else
-	    {
-		if( iHead->obj.rev != iLookup->rev)
-		{
-		    /* It is not the signature object that we are looking for */
-		    goto next_obj;
-		}
-	    }
-	    
-	    if(  iHead->flag & CACHE_INTERNAL_ONLY)
-	    {
-		iHead->flag ^= (CACHE_INTERNAL_ONLY | CACHE_BOTH);
-	    }
-	    else
-	    {
-		iHead->flag ^= CACHE_BOTH;
-	    }
-	    
-	    /* NOTE: -elz For cleanness this should be removed from here, moved to the caller and add a 
-	       param for the found node.. but since its only called from one place, this is currently 
-		   how its done...lazyness first.
-	    */
-	    /* Set values from the database */
-	    iHead->obj.db_id = iLookup->db_id;
-	    iHead->obj.class_id = iLookup->class_id;
-	    iHead->obj.priority_id = iLookup->priority_id;
-	    return 1;
-	}
-	
-    next_obj:
-	iHead = iHead->next;
-    }    
-    
-    return 0;
-
-}
-
-
-/** 
  * Lookup for dbClassificationObj in cacheClassificationObj 
  * @note Used in context db->internaCache lookup (if found remove CACHE_INTERNAL_ONLY and set CACHE_BOTH flag)
  * 
@@ -967,154 +779,24 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 */
 
 
-u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache,u_int32_t from)
-{
-    cacheSignatureObj *TobjNode = NULL;
-    
-    if( (iMasterCache == NULL) ||
-	(iSigObj == NULL))
-    {
-	/* XXX */
-	return 1;
-    }
-    
-    if( (TobjNode = SnortAlloc(sizeof(cacheSignatureObj))) == NULL)
-    {
-	/* XXX */
-	return 1;
-    }
-    
-    memcpy(&TobjNode->obj,iSigObj,sizeof(dbSignatureObj));
+u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache) {
+	cacheSignatureObj *TobjNode = NULL;
 
-    if( from == 0)
-    {
-	TobjNode->flag ^= CACHE_INTERNAL_ONLY;
-    }
-    else
-    {
-	TobjNode->flag ^= CACHE_BOTH;
-    }
-
-    TobjNode->next = iMasterCache->cacheSignatureHead;
-    iMasterCache->cacheSignatureHead = TobjNode;
-    
-    return 0;
-}
-
-
-
-/** 
- * This function will convert the signature cache.
- * 
- * @param iHead 
- * @param iMasterCache 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,DatabaseData *data)
-{
-    SigNode *cNode = NULL;
-    cacheSignatureObj *TobjNode = NULL;    
-    dbSignatureObj lookupNode = {0};    
-
-    if( (iHead == NULL) ||
-	(iMasterCache == NULL) || 
-	(data == NULL))
-    {
-	/* XXX */
-	return 1;
-    }
-    
-    if( (cNode = *iHead) == NULL)
-    {
-        /* Nothing to do */
-        return 0;
-    }
-    
-    while(cNode != NULL)
-    {
-
-	memset(&lookupNode,'\0',sizeof(dbSignatureObj));
-	
-	lookupNode.gid  = cNode->generator;
-        lookupNode.sid  = cNode->id;
-        lookupNode.rev  = cNode->rev;
-        lookupNode.class_id  = cNode->class_id;
-        lookupNode.priority_id  = cNode->priority;
-	
-	if( cNode->msg != NULL)
-	{
-	    strncpy(lookupNode.message,cNode->msg,SIG_MSG_LEN);
-	    lookupNode.message[SIG_MSG_LEN-1] = '\0'; //safety
-	    
-	    
-	    if( (snort_escape_string_STATIC(lookupNode.message,SIG_MSG_LEN,data)))
-            {
-                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-                           "[%s], Exiting. \n",
-                           __FUNCTION__,
-                           lookupNode.message);
-            }
-	}
-	else
-	{
-	    snprintf(lookupNode.message, SIG_MSG_LEN,
-		     "Snort Alert [%u:%u:%u]",
-		     lookupNode.gid,
-		     lookupNode.sid,
-		     lookupNode.rev);
-	}
-	
-	//Do not allow duplicate to exist
-	if( (cacheSignatureLookup(&lookupNode,iMasterCache->cacheSignatureHead) == 0) )
-	{
-	    if( (TobjNode = SnortAlloc(sizeof(cacheSignatureObj))) == NULL)
-	    {
-		/* XXX */
+	if(iMasterCache == NULL || iSigObj == NULL)
 		return 1;
-	    }
-	    
-	    memcpy(&TobjNode->obj,&lookupNode,sizeof(dbSignatureObj));
-	    
-	    TobjNode->flag ^= CACHE_INTERNAL_ONLY;
-	    
-	    TobjNode->next = iMasterCache->cacheSignatureHead;
-	    iMasterCache->cacheSignatureHead = TobjNode;
-	    
-	    if(cNode->refs != NULL)
-	    {
-		if( (ConvertReferenceCache(cNode->refs,iMasterCache,TobjNode,data)))
-		{
-		    /* XXX */
-		    return 1;
-		}
-	    }
-#if DEBUG	
-	    file_signature_object_count++;
-#endif 
-	    
-	}
-	else
-	{
-	    LogMessage("WARNING: While processing data parsed from SIGNATURE FILE a duplicate entry was found [DUPLICATE ARE NOT PROCESSED]:\n"
-		       "\tGenerator ID:[%u] \tSignature ID:[%u] \tRevision:[%u] Classification ID:[%u] \t \n"
-		       "\tMessage  [%s]\n",
-		       lookupNode.gid,
-		       lookupNode.sid,
-		       lookupNode.rev,
-		       lookupNode.class_id,
-		       lookupNode.message);
-	}
 
+	if((TobjNode = SnortAlloc(sizeof(cacheSignatureObj))) == NULL)
+		return 1;
 
-	cNode = cNode->next;
-    }
-    
-    return 0;
+	memcpy(&TobjNode->obj,iSigObj,sizeof(dbSignatureObj));
+
+	TobjNode->flag ^= CACHE_BOTH;
+
+	TobjNode->next = iMasterCache->cacheSignatureHead;
+	iMasterCache->cacheSignatureHead = TobjNode;
+
+	return 0;
 }
-
 
 /** 
  * This function will convert the classification cache. 
@@ -1991,6 +1673,33 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 
 /***********************************************************************************************SIGNATURE API*/
 
+/**
+ * Lookup a signature in the sid-msg.map cache. If the signature is found, this
+ * function has the side effect of populating lookup->msg.
+ *
+ * @return 0 found
+ * @return 1 not found / error
+ */
+static u_int32_t SignatureLookupCache(SigNode * cacheHead, dbSignatureObj * lookup) {
+	if (cacheHead == NULL || lookup == NULL)
+		return 1;
+
+	SigNode * cur = cacheHead;		
+	int found = 0;
+	while (cur != NULL) {
+		//this does not really account for sidmapv1... hah fuck that shit!
+		//@TODO make the dbSignatureObj contain a SigNode then append the
+		//db_id to that so I can do equality nicer.
+		if (cur->generator == lookup->gid && cur->id == lookup->sid 
+				&& cur->rev == lookup->rev && cur->priority == lookup->priority_id
+				&& cur->class_id == lookup->class_id) {
+			found = 1;
+			strncpy(lookup->message, cur->msg, SIG_MSG_LEN); 
+		}
+		cur = cur->next;
+	}
+	return !found;
+}
 
 
 /** 
@@ -2051,16 +1760,6 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
 			    data->SQL_SELECT));
 #endif
     
-    /* 
-       This usleep is mainly to prevent uncontrolable collision, since this code could be executed in parallel
-       pretty fast to create the race condition anyways, there is a chance adding a small delay that someone will win the race
-    */
-    usleep(400);
-    /* 
-       This usleep is mainly to prevent uncontrolable collision, since this code could be executed in parallel
-       pretty fast to create the race condition anyways, there is a chance adding a small delay that someone will win the race
-    */	
-
     if(Select(data->SQL_SELECT,data,&db_sig_id))
     {
 	/* XXX */
@@ -2100,939 +1799,164 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
  * 0 OK
  * 1 ERROR
  */
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac)
+u_int32_t SignaturePopulateDatabase(DatabaseData  *data,dbSignatureObj * sig,int inTransac)
 {
-    u_int32_t db_sig_id = 0;
+	u_int32_t db_sig_id = 0;
 
 
-    if( (data == NULL) ||
-	(cacheHead == NULL))
-    {
-	/* XXX */
-	return 1;
-    }
+	if( (data == NULL) || (sig == NULL))
+		return 1;
 
-    if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
-    {
-        /* A This shouldn't happen since we are in failed transaction state */
-        /* XXX */
-        return 1;
-    }
-
-    if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
-    {
-        /* XXX */
-        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
-                   __FUNCTION__,
-                   data->SQL_SELECT);
-    }
-    
-    if(inTransac == 0)
-    {
-	if( (BeginTransaction(data)))
-	{
-	    /* XXX */
-	    return 1;
+	if(checkTransactionCall(&data->dbRH[data->dbtype_id])) {
+		/* A This shouldn't happen since we are in failed transaction state */
+		/* XXX */
+		return 1;
 	}
-    }
-        
-    while(cacheHead != NULL)
-    {
-	
-	/* This condition block is a shortcut in the signature insertion code.
-	** Preventing signature that have not been under "revision" (rev == 0) to be inserted in the database.
-	** It will also prevent the code to take wrong execution path downstream.
-	*/
-	if( ((cacheHead->flag & CACHE_INTERNAL_ONLY) && 
-	     (((cacheHead->obj.gid != 1 && cacheHead->obj.gid != 3)) ||
-	      ((cacheHead->obj.gid == 1 || cacheHead->obj.gid == 3) && cacheHead->obj.rev != 0))))
-	{
-	/* This condition block is a shortcut in the signature insertion code.
-	** Preventing signature that have not been under "revision" (rev == 0) to be inserted in the database.
-	** It will also prevent the code to take wrong execution path downstream.
-	*/
 
-	    
+	if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id]))) {
+		/* XXX */
+		FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+				__FUNCTION__,
+				data->SQL_SELECT);
+	}
+
+	if(inTransac == 0) {
+		if( (BeginTransaction(data)))
+			return 1;
+	}
+
+	/* This condition block is a shortcut in the signature insertion code.
+	 ** Preventing signature that have not been under "revision" (rev == 0) to be inserted in the database.
+	 ** It will also prevent the code to take wrong execution path downstream.
+	 ** @TODO: remove flag field?? ((cacheHead->flag & CACHE_INTERNAL_ONLY) && 
+	 */
+	if((sig->gid != 1 && sig->gid != 3) || ((sig->gid == 1 || sig->gid == 3) && sig->rev != 0)) {
+		/* This condition block is a shortcut in the signature insertion code.
+		 ** Preventing signature that have not been under "revision" (rev == 0) to be inserted in the database.
+		 ** It will also prevent the code to take wrong execution path downstream.
+		 */
+
 #if DEBUG
-	    inserted_signature_object_count++;
+		inserted_signature_object_count++;
 #endif 
-	    /* DONE at object Insertion
-	      if( (snort_escape_string_STATIC(cacheHead->obj.message,SIG_MSG_LEN,data)))
-	      {
-	      FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-	      "[%s], Exiting. \n",
-	      __FUNCTION__,
-	      cacheHead->obj.message);
-	      }
-	    */
 
-	    DatabaseCleanInsert(data);
+		DatabaseCleanInsert(data);
 
 
-	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-			       SQL_INSERT_SIGNATURE,
-			       cacheHead->obj.sid,
-			       cacheHead->obj.gid,
-			       cacheHead->obj.rev,
-			       cacheHead->obj.class_id,
-			       cacheHead->obj.priority_id,
-			       cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		    /* XXX */
-		goto TransactionFail;
-	    }
-		    
-	    DatabaseCleanSelect(data);
-
-	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-			       SQL_SELECT_SPECIFIC_SIGNATURE,
-			       cacheHead->obj.sid,
-			       cacheHead->obj.gid,
-			       cacheHead->obj.rev,
-			       cacheHead->obj.class_id,
-			       cacheHead->obj.priority_id,
-			       cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
-	    }
-		    
-	    if(Insert(data->SQL_INSERT,data,1))
-	    {
-		/* XXX */
-		goto TransactionFail;
-	    }
-	    
-	    if(Select(data->SQL_SELECT,data,&db_sig_id))
-	    {
-		/* XXX */
-		goto TransactionFail;
-	    }
-	    
-	    cacheHead->obj.db_id = db_sig_id;
-
-	    
-	    cacheHead->flag ^=  (CACHE_INTERNAL_ONLY | CACHE_BOTH);
-	}
-
-	cacheHead = cacheHead->next;
-
-
-    }
-    
-    
-    if(inTransac == 0)
-    {
-	if(CommitTransaction(data))
-	{
-	    /* XXX */
-	    return 1;
-	}
-    }
-    
-    return 0;
-    
-TransactionFail:
-    if( inTransac == 0)
-    {
-	RollbackTransaction(data);
-    }
-
-    return 1;    
-}
-
-/** 
- *  Merge internal Signature cache with database data, detect difference, tag known node for database update
- * @param iDBList 
- * @param array_length 
- * @param cacheHead 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t SignatureCacheUpdateDBid(dbSignatureObj *iDBList,u_int32_t array_length,cacheSignatureObj **cacheHead)
-{
-    dbSignatureObj *cObj = NULL;
-    cacheSignatureObj *TobjNode = NULL;
-    int x = 0;
-    
-    if( ((iDBList == NULL) || 
-	 (array_length == 0) ||
-	 (cacheHead == NULL)))
-    {
-        /* XXX */
-        return 1;
-    }
-    
-    for(x = 0 ; x < array_length ; x++)
-    {
-        cObj = &iDBList[x];
-	
-        if( (dbSignatureLookup(cObj,*cacheHead)) == 0 )
-        {
-	    /* Element not found, add the db entry to the list. */
-            if( (TobjNode = SnortAlloc(sizeof(cacheSignatureObj))) == NULL)
-            {
-		/* XXX */
-		return 1;
-            }
-	    
-            memcpy(&TobjNode->obj,cObj,sizeof(dbSignatureObj));
-            TobjNode->flag ^= CACHE_DATABASE_ONLY;
-	    
-            if(*cacheHead == NULL)
-            {
-                *cacheHead = TobjNode;
-            }
-            else
-            {
-                TobjNode->next = *cacheHead;
-                *cacheHead = TobjNode;
-            }
-        }
-    }
-    
-    return 0;
-}
-
-
-/** 
- * Fetch Signature from database
- * 
- * @param data 
- * @param iArrayPtr 
- * @param array_length 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,u_int32_t *array_length)
-{
-
-#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC))
-    u_int32_t curr_row = 0;
-#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC)) */        
-    
-
-#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))
-      u_int32_t queryColCount =0;
-#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
-
-    
-#ifdef ENABLE_ODBC
-    dbSignatureObj tSigObj = {0};
-    SQLSMALLINT col_count = 0;
-#endif /* ENABLE_ODBC */
-
-    
-#ifdef ENABLE_MYSQL
-    int result = 0;
-#endif
-
-    
-#ifdef ENABLE_POSTGRESQL
-
-    char *pg_val = NULL;
-    int num_row = 0;
-    u_int32_t curr_col = 0;    
-    u_int8_t pgStatus = 0;
-#endif /* ENABLE_POSTGRESQL */
-
-    if( (data == NULL) ||
-        ( ( iArrayPtr == NULL )  && ( *iArrayPtr != NULL )) ||
-        ( array_length == NULL))
-    { 
-	/* XXX */
-	LogMessage("[%s()], Call failed DataBaseData[0x%x] dbSignatureObj **[0x%x] u_int32_t *[0x%x] \n",
-		   __FUNCTION__,
-		   data,
-		   iArrayPtr,
-		   array_length);
-	return 1;
-    }
-    
-    DatabaseCleanSelect(data);
-    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                       SQL_SELECT_ALL_SIGNATURE)!=  SNORT_SNPRINTF_SUCCESS))
-    {
-        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
-		   __FUNCTION__);
-    }
-    
-    if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
-    {
-        /* A This shouldn't happen since we are in failed transaction state */
-        /* XXX */
-        return 1;
-    }
-    
-    if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
-    {
-        /* XXX */
-        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
-                   __FUNCTION__,
-                   data->SQL_SELECT);
-    }
-
-    switch(data->dbtype_id)
-    {
-	
-#ifdef ENABLE_MYSQL
-	
-    case DB_MYSQL:
-
-        result = mysql_query(data->m_sock,data->SQL_SELECT);
-
-        switch(result)
-        {
-        case 0:
-
-            if( (data->m_result = mysql_store_result(data->m_sock)) == NULL)
-            {
-                /* XXX */
-                LogMessage("[%s()], Failed call to mysql_store_result \n",
-                           __FUNCTION__);
-                return 1;
-            }
-            else
-            {
-		
-                MYSQL_ROW row = NULL;
-                my_ulonglong num_row = 0;
-                unsigned int i = 0;
-		
-                if( (num_row = mysql_num_rows(data->m_result)) > 0)
-                {
-                    if( (*iArrayPtr = SnortAlloc( (sizeof(dbSignatureObj) * num_row))) == NULL)
-		    {
-			mysql_free_result(data->m_result);
-			data->m_result = NULL;
-			FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
-				   __FUNCTION__);
-		    }
-		}
-		else
+		if((SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+						SQL_INSERT_SIGNATURE,
+						sig->sid,
+						sig->gid,
+						sig->rev,
+						sig->class_id,
+						sig->priority_id,
+						sig->message)) !=  SNORT_SNPRINTF_SUCCESS)
 		{
-		    /* XXX */
-		    free(*iArrayPtr);
-		    *iArrayPtr = NULL;
-                    mysql_free_result(data->m_result);
-                    data->m_result = NULL;
-                    LogMessage("[%s()]: No signature found in database ... \n",
-                               __FUNCTION__);
-		    return 0;
-                }
-		
-		*array_length = num_row;
-		
-		queryColCount = mysql_num_fields(data->m_result);
-		
-                if(queryColCount != NUM_ROW_SIGNATURE)
-                {
-                    /* XXX */
-                    free(*iArrayPtr);
-		    *iArrayPtr = NULL;
-                    mysql_free_result(data->m_result);
-                    data->m_result = NULL;
-                    LogMessage("[%s()] To many column returned by query [%u]...\n",
-                               __FUNCTION__,
-                               queryColCount);
-                    return 1;
-                }
-		
-                while ((curr_row < num_row) &&
-                       (row = mysql_fetch_row(data->m_result)))
-                {
-
-		    dbSignatureObj *cPtr = &(*iArrayPtr)[curr_row];
-		    
-		    for(i = 0; i < queryColCount; i++)
-                    {
-                        unsigned long *lengths={0};
-			
-                        if( (lengths = mysql_fetch_lengths(data->m_result)) == NULL)
-                        {
-                            free(*iArrayPtr);
-			    *iArrayPtr = NULL;
-                            mysql_free_result(data->m_result);
-                            data->m_result = NULL;
-                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
-                                       __FUNCTION__);
-                        }
-						
-                        if( (row[i] != NULL) )
-			{
-                            switch (i)
-                            {
-				
-                            case 0:
-                                cPtr->db_id = strtoul(row[i],NULL,10);
-                                break;
-				
-                            case 1:
-				cPtr->sid= strtoul(row[i],NULL,10);
-                                break;
-				
-			    case 2:
-				cPtr->gid = strtoul(row[i],NULL,10);
-				break;
-				
-			    case 3:
-				cPtr->rev = strtoul(row[i],NULL,10);
-				break;
-				
-			    case 4:
-				cPtr->class_id = strtoul(row[i],NULL,10);
-				break;
-				
-			    case 5:
-				cPtr->priority_id = strtoul(row[i],NULL,10);
-				break;
-				
-			    case 6:
-				strncpy(cPtr->message,row[i],SIG_MSG_LEN);
-				cPtr->message[SIG_MSG_LEN-1] = '\0'; //safety
-				
-                                //Safety escape value.
-				if( (snort_escape_string_STATIC(cPtr->message,SIG_MSG_LEN,data)))
-				{
-				    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-					       "[%s], Exiting. \n",
-					       __FUNCTION__,
-					       cPtr->message);
-				}
-				break;
-				
-                            default:
-                                /* XXX */
-                                /* Should bail here... */
-                                break;
-                            }
-			}
-		    }
-		    curr_row++;
-                }
-		
-                mysql_free_result(data->m_result);
-                data->m_result = NULL;
-                return 0;
-            }
-            break;
-	    
-	    
-        case CR_COMMANDS_OUT_OF_SYNC:
-        case CR_SERVER_GONE_ERROR:
-        case CR_UNKNOWN_ERROR:
-        default:
-	    
-            if(checkTransactionState(data->dbRH))
-            {
-                LogMessage("[%s()]: Failed executing with error [%s], in transaction will Abort. \n Failed QUERY: [%s] \n",
-                           __FUNCTION__,
-                           mysql_error(data->m_sock),
-                           data->SQL_SELECT);
-                return 1;
-            }
-	    
-            LogMessage("[%s()]: Failed exeuting query [%s] , will retry \n",
-                       __FUNCTION__,
-                       data->SQL_SELECT);
-	    break;
-
-        }
-
-        /* XXX */
-        return 1;
-
-        break;
-
-#endif /* ENABLE_MYSQL */
-
-#ifdef ENABLE_POSTGRESQL
-    case DB_POSTGRESQL:
-
-        data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
-
-        pgStatus = PQresultStatus(data->p_result);
-        switch(pgStatus)
-	{
-
-	case PGRES_TUPLES_OK:
-
-	    if( (num_row = PQntuples(data->p_result)))
-	    {
-		*array_length = num_row;
-		
-		if( (queryColCount = PQnfields(data->p_result)) !=  NUM_ROW_SIGNATURE)
-		{
-		    LogMessage("[%s()] To many column returned by query [%u]...\n",
-			       __FUNCTION__,
-			       queryColCount);
-		    PQclear(data->p_result);
-		    data->p_result = NULL;
-		    return 1;
-		}
-		
-		if( (*iArrayPtr = SnortAlloc( (sizeof(dbSignatureObj) * num_row))) == NULL)
-		{
-		    if(data->p_result)
-		    {
-			PQclear(data->p_result);
-			data->p_result = NULL;
-		    }
-		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
-			       __FUNCTION__);
+			/* XXX */
+			goto TransactionFail;
 		}
 
-		for(curr_row = 0 ; curr_row < num_row ; curr_row++)
+		DatabaseCleanSelect(data);
+
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+						SQL_SELECT_SPECIFIC_SIGNATURE,
+						sig->sid,
+						sig->gid,
+						sig->rev,
+						sig->class_id,
+						sig->priority_id,
+						sig->message)) !=  SNORT_SNPRINTF_SUCCESS)
 		{
-		    dbSignatureObj *cPtr = &(*iArrayPtr)[curr_row];
-
-		    for(curr_col = 0 ; curr_col < queryColCount ; curr_col ++)
-		    {
-			pg_val = NULL;
-			if( (pg_val = PQgetvalue(data->p_result,curr_row,curr_col)) == NULL)
-			{
-			    /* XXX */
-			    /* Something went wrong */
-			    PQclear(data->p_result);
-			    data->p_result = NULL;
-			    return 1;
-			}
-			switch(curr_col)
-			{
-			case 0:
-			    cPtr->db_id = strtoul(pg_val,NULL,10);
-			    break;
-
-			case 1:
-			    cPtr->sid= strtoul(pg_val,NULL,10);
-			    break;
-
-			case 2:
-			    cPtr->gid = strtoul(pg_val,NULL,10);
-			    break;
-
-			case 3:
-			    cPtr->rev = strtoul(pg_val,NULL,10);
-			    break;
-
-			case 4:
-			    cPtr->class_id = strtoul(pg_val,NULL,10);
-			    break;
-
-			case 5:
-			    cPtr->priority_id = strtoul(pg_val,NULL,10);
-			    break;
-
-			case 6:
-			    strncpy(cPtr->message,pg_val,SIG_MSG_LEN);
-			    cPtr->message[SIG_MSG_LEN-1] = '\0'; //safety
-
-			    //Safety escape value.
-			    if( (snort_escape_string_STATIC(cPtr->message,SIG_MSG_LEN,data)))
-			    {
-				FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-					   "[%s], Exiting. \n",
-					   __FUNCTION__,
-					   cPtr->message);
-			    }
-			    break;
-
-			default:
-			    /* We should bail here*/
-			    break;
-			}
-		    }
+			/* XXX */
+			goto TransactionFail;
 		}
-	    }
-	    else
-	    {
-		*array_length = 0;
-	    }
 
-
-	    if(data->p_result)
-	    {
-		PQclear(data->p_result);
-		data->p_result = NULL;
-	    }
-
-	    return 0;
-	    break;
-
-	default:
-	    if(PQerrorMessage(data->p_connection)[0] != '\0')
-	    {
-		ErrorMessage("ERROR database: postgresql_error: %s\n",
-			     PQerrorMessage(data->p_connection));
-		return 1;
-	    }
-	    break;
-	}
-
-	return 1;
-	break;
-
-
-#endif /* ENABLE_POSTGRESQL */
-
-
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-        if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
-	{
-	    if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)data->SQL_SELECT, SQL_NTS) == SQL_SUCCESS)
-            {
-		    if( SQLNumResultCols(data->u_statement,&col_count) == SQL_SUCCESS)
-		    {
-			if(col_count ==  NUM_ROW_SIGNATURE)
-			{
-			    if(SQLRowCount(data->u_statement, &data->u_rows) != SQL_SUCCESS)
-			    {
-				ODBCPrintError(data,SQL_HANDLE_STMT);
-				FatalError("[%s()]: SQLRowCount() call failed \n",
-					   __FUNCTION__);
-			    }
-
-			    if(data->u_rows)
-			    {
-				if( (*iArrayPtr = SnortAlloc( (sizeof(dbSignatureObj) * data->u_rows))) == NULL)
-				{
-				    goto ODBCError;
-				}
-
-				*array_length = data->u_rows;
-
-			    }
-			    else
-			    {
-				/* We have no records */
-				*array_length = 0;
-				return 0;
-			    }
-
-			}
-			else
-			{
-			    FatalError("[%s()]: The number of column returned does not match [%u] \n",
-				       __FUNCTION__,
-				       NUM_ROW_SIGNATURE);
-			}
-		    }
-		    else
-		    {
-			LogMessage("[%s()]: SQLNumResultCols() call failed \n",
-				   __FUNCTION__);
-			ODBCPrintError(data,SQL_HANDLE_STMT);
-			goto ODBCError;
-		    }
-	    }
-	    else
-	    {
-		LogMessage("[%s()]: SQLExecDirect() call failed \n",
-			   __FUNCTION__);
-		ODBCPrintError(data,SQL_HANDLE_STMT);
-		goto ODBCError;
-		
-	    }
-	}
-	else
-	{
-	    LogMessage("[%s()]: SQLAllocStmt() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-
-	SQLINTEGER col1_len = 0;
-	SQLINTEGER col2_len = 0;
-	SQLINTEGER col3_len = 0;
-	SQLINTEGER col4_len = 0;
-	SQLINTEGER col5_len = 0;
-	SQLINTEGER col6_len = 0;
-	SQLINTEGER col7_len = 0;
-	
-	/* Bind template object */
-	if( SQLBindCol(data->u_statement,1,SQL_C_LONG,&tSigObj.db_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	if( SQLBindCol(data->u_statement,2,SQL_C_LONG,&tSigObj.sid,sizeof(u_int32_t),&col2_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	if( SQLBindCol(data->u_statement,3,SQL_C_LONG,&tSigObj.gid,sizeof(u_int32_t) ,&col3_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	if( SQLBindCol(data->u_statement,4,SQL_C_LONG,&tSigObj.rev,sizeof(u_int32_t) ,&col4_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-
-	if( SQLBindCol(data->u_statement,5,SQL_C_LONG,&tSigObj.class_id,sizeof(u_int32_t) ,&col4_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	if( SQLBindCol(data->u_statement,6,SQL_C_LONG,&tSigObj.priority_id,sizeof(u_int32_t) ,&col5_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}								
-	
-	if( SQLBindCol(data->u_statement,7,SQL_C_CHAR,tSigObj.message, (sizeof(char)*SIG_MSG_LEN) ,&col6_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	for(curr_row = 0; curr_row < data->u_rows ;curr_row++)
-	{
-	    dbSignatureObj *cPtr = &(*iArrayPtr)[curr_row];
-	    
-	    /* fetch */
-	    if( SQLFetch(data->u_statement) != SQL_SUCCESS)
-	    {
-		LogMessage("[%s()]: SQLFetch error on record [%u] \n",
-			   __FUNCTION__,
-			   curr_row+1);
-		ODBCPrintError(data,SQL_HANDLE_STMT);
-		goto ODBCError;
-	    }
-	    else
-	    {
-		if( (col1_len == SQL_NO_TOTAL || col1_len == SQL_NULL_DATA) ||
-		    (col2_len == SQL_NO_TOTAL || col2_len == SQL_NULL_DATA) ||
-		    (col3_len == SQL_NO_TOTAL || col3_len == SQL_NULL_DATA) ||
-		    (col4_len == SQL_NO_TOTAL || col4_len == SQL_NULL_DATA) ||
-		    (col5_len == SQL_NO_TOTAL || col5_len == SQL_NULL_DATA) ||
-		    (col6_len == SQL_NO_TOTAL || col6_len == SQL_NULL_DATA) ||
-		    (col7_len == SQL_NO_TOTAL || col7_len == SQL_NULL_DATA))
+		if(Insert(data->SQL_INSERT,data,1))
 		{
-		    FatalError("[%s()] Seem's like we have some null data ...\n",
-			       __FUNCTION__);
+			/* XXX */
+			goto TransactionFail;
 		}
-		
-		/* Copy object */
-		if( (memcpy(cPtr,&tSigObj,sizeof(dbSignatureObj))) != cPtr)
+
+		if(Select(data->SQL_SELECT,data,&db_sig_id))
 		{
-		    FatalError("[%s()] : memcpy error ..\n",
-			       __FUNCTION__);
+			/* XXX */
+			goto TransactionFail;
 		}
-		
-		cPtr->message[SIG_MSG_LEN-1] = '\0';
-		if( (snort_escape_string_STATIC(cPtr->message,SIG_MSG_LEN,data)))
-		{
-		    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-			       "[%s], Exiting. \n",
-			       __FUNCTION__,
-			       cPtr->message);
-		}
-		
-		/* Clear temp obj */
-		memset(&tSigObj,'\0',sizeof(dbSignatureObj));
-	    }
+
+		sig->db_id = db_sig_id;
 	}
 
 
-	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	if(inTransac == 0) {
+		if(CommitTransaction(data)) {
+			return 1;
+		}
+	}
+
 	return 0;
 
-    ODBCError:
-	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-	return 1;
+TransactionFail:
+	if( inTransac == 0) {
+		RollbackTransaction(data);
+	}
 
-        break;
-#endif /* ENABLE_ODBC */
-
-#ifdef ENABLE_ORACLE
-    case DB_ORACLE:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-
-        break;
-#endif /* ENABLE_ORACLE */
-
-
-	
-#ifdef ENABLE_MSSQL
-    case DB_MSSQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-#endif /* ENABLE_MSSQL */
-	
-    default:
-	
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-	
-    }
-    
-    return 0;
+	return 1;    
 }
-
 
 /**
- * Find signature with the same SID and GID and set Ref. If Ref is found, 
- * also check for CACHE_BOTH FLAG
+ * Lookup the database ID for a given signature. First, check the database
+ * cache for the exact (sid,gid,rev,class,priority). Failing that, check the
+ * database (if found: cache). Failing that, consult the sid-msg.map. Failing
+ * that: create a new sig in the DB with message "Snort Alert [gid:sid:rev]"
+ * @TODO: should this be put in the DB cache? probably. It will end up there
+ * if the sig hits again.
  *
- * @param cacheHead 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
+ * @param data
+ * @param lookup a dbSignatureObj containing the parameters to lookup. 
+ *
+ * @return The id number of the signature row in the database or 0 on error.
  */
-u_int32_t SignatureReferencePreGenerate(cacheSignatureObj *iHead)
-{
-    cacheSignatureObj *cObj = NULL;
-    cacheSignatureObj *searchObj = NULL;
-    if( iHead == NULL)
-    {
-	/* XXX */
-	return 1;
-    }
-    
-    cObj = iHead;
+u_int32_t SignatureLookup(DatabaseData * data, dbSignatureObj * lookup) {
+	u_int32_t db_sig_id = 0;
 
-    while(cObj != NULL)
-    {
-	if( (cObj->flag & CACHE_BOTH) &&
-	    (cObj->obj.rev != 0) &&
-	    (cObj->obj.ref_count > 0))
-	{
-	    searchObj = iHead;
-	    
-	    while(searchObj != NULL)
-	    {
-		if( (searchObj != cObj) &&
-		    (cObj->obj.sid == searchObj->obj.sid) &&
-		    (cObj->obj.gid == searchObj->obj.gid) &&
-		    /* Only set lesser revision rule with refs */
-		    (cObj->obj.rev < searchObj->obj.rev))
-		{
-		    searchObj->obj.ref_count = cObj->obj.ref_count;
-		    memcpy(searchObj->obj.ref,cObj->obj.ref, (sizeof(cacheReferenceObj *)*MAX_REF_OBJ));
+	if (SignatureLookupDbCache(data->mc.cacheSignatureHead, lookup) == 0) {
+		db_sig_id = lookup->db_id;
+	} else if (SignatureLookupDatabase(data,lookup) == 0) {
+			db_sig_id = lookup->db_id;
+
+		if (SignatureCacheInsertObj(lookup,&data->mc)) {
+			//intentionally not returning here: the data may not be cached
+			//locally, but we did populate the signature ID
+			//@TODO
 		}
-		
-		searchObj = searchObj->next;
-	    }
+	} else {
+		//returns 1 if not found.
+		if (SignatureLookupCache(*BcGetSigNodeHead(), lookup) != 0) {
+			if (SnortSnprintf(lookup->message,SIG_MSG_LEN,"Snort Alert [%u:%u:%u]",
+						lookup->gid,lookup->sid,lookup->rev)) {
+				return 0;
+			}
+		}
+
+		//@TODO: This inTransac is a bad time.
+		if (SignaturePopulateDatabase(data,lookup,1)) {
+			LogMessage("[%s()]: ERROR inserting new signature \n",
+					__FUNCTION__);
+			return 0;
+		}
+
+		if (SignatureCacheInsertObj(lookup,&data->mc)) {
+			/* XXX */
+			LogMessage("[%s()]: ERROR inserting object in the cache list .... \n",
+					__FUNCTION__);
+			return 0;
+		}
+
+		db_sig_id = lookup->db_id;
 	}
-	
-	cObj = cObj->next;
-    }
-    
-    return 0;
 
+	return db_sig_id;
 }
-
-/** 
- * Wrapper function for signature cache synchronization
- * 
- * @param data 
- * @param cacheHead 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cacheHead)
-{
-
-    dbSignatureObj *dbSigArray = NULL;
-    u_int32_t array_length = 0;
-    
-    if( (data == NULL) ||
-        (*cacheHead == NULL))
-    {
-        /* XXX */
-        return 1;
-    }
-    
-    if( (SignaturePullDataStore(data,&dbSigArray,&array_length)))
-    {
-        /* XXX */
-        return 1;
-    }
-
-#if DEBUG
-    db_signature_object_count=array_length;
-#endif
-
-    if( array_length > 0 )
-    {
-        if( (SignatureCacheUpdateDBid(dbSigArray,array_length,cacheHead)) )
-        {
-            /* XXX */
-            if( dbSigArray != NULL)
-            {
-                free(dbSigArray);
-                dbSigArray = NULL;
-                array_length = 0;
-            }
-	    
-            LogMessage("[%s()], Call to SignatureCacheUpdateDBid() failed \n",
-                       __FUNCTION__);
-            return 1;
-        }
-	
-        if(dbSigArray != NULL)
-        {
-            free(dbSigArray);
-            dbSigArray = NULL;
-        }
-        array_length = 0;
-    }
-    
-    
-    if(SignaturePopulateDatabase(data,*cacheHead,0))
-    {
-        LogMessage("[%s()], Call to SignaturePopulateDatabase() failed \n",
-                   __FUNCTION__);
-	return 1;
-    }
-
-    /* Equilibrate references thru sibblings.*/
-    if(SignatureReferencePreGenerate(*cacheHead))
-    {
-	LogMessage("[%s()], Call to SignatureReferencePreGenerate failed \n",
-		   __FUNCTION__);
-	return 1;
-    }
-
-    /* Well done */
-    return 0;
-}
-
-
-
 
 /***********************************************************************************************SYSTEM API*/
 /*
@@ -5128,69 +4052,6 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
     return 0;
 }
 
-
-/** 
- * get Signature node from cache where DBid match the lookup id.
- * 
- * @param iHead 
- * @param lookupId 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-cacheSignatureObj *cacheGetSignatureNodeUsingDBid(cacheSignatureObj *iHead,u_int32_t lookupId)
-{
-    while(iHead != NULL)
-    {
-	if(iHead->obj.db_id == lookupId)
-	{
-	    return iHead;
-	}
-
-	iHead = iHead->next;
-    }
-    
-    return NULL;
-}
-
-
-/** 
- * get Reference node from cache where DBid match the lookup id.
- * 
- * @param iHead 
- * @param lookupId 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-cacheReferenceObj *cacheGetReferenceNodeUsingDBid(cacheSystemObj *iHead,u_int32_t lookupId)
-{
-    cacheReferenceObj *retRef = NULL;
-    cacheReferenceObj *refPtr = NULL;
-    
-    while(iHead != NULL)
-    {
-	refPtr = iHead->obj.refList;
-	
-	while( (refPtr != NULL))
-	{
-	    if(refPtr->obj.ref_id)
-	    {
-		return refPtr;
-	    }
-	    
-	    refPtr = refPtr->next;
-	}
-	iHead  =  iHead->next;
-    }
-    
-    return retRef;
-}
-
-
-
 /** 
  *  Merge internal SignatureReference cache with database data, detect difference, tag known node for database update
  * 
@@ -5574,77 +4435,65 @@ f_exit:
  * 0 OK
  * 1 ERROR
  */
-u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cacheHead,cacheSignatureObj *cacheSigHead)
-{
-    
-    //cacheSignatureReferenceObj *SystemCacheElemPtr = NULL;
-    dbSignatureReferenceObj *dbSigRefArray = NULL;
-    
-    u_int32_t array_length = 0;
-    
-    
-    if( (data == NULL) ||
-	(cacheHead == NULL) ||
-	(cacheSigHead == NULL))
-    {
-	/* XXX */
-	return 1;
-    }
-    
-    if( (GenerateSigRef(cacheHead,cacheSigHead)))
-    {
-	/* XXX */
-	return 1;
-    }
-    
-    //Pull from the db
-    if( (SignatureReferencePullDataStore(data,&dbSigRefArray,&array_length)))
-    {
-	/* XXX */
-        LogMessage("SignatureReferencePullDataStore failed \n");
-	return 1;
-    }
+u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cacheHead,cacheSignatureObj *cacheSigHead) {
+
+	dbSignatureReferenceObj *dbSigRefArray = NULL;
+
+	u_int32_t array_length = 0;
+
+
+	if( (data == NULL) || (cacheHead == NULL) || (cacheSigHead == NULL)) {
+		/* XXX */
+		return 1;
+	}
+
+	if( (GenerateSigRef(cacheHead,cacheSigHead))) {
+		/* XXX */
+		return 1;
+	}
+
+	//Pull from the db
+	if( (SignatureReferencePullDataStore(data,&dbSigRefArray,&array_length))) {
+		/* XXX */
+		LogMessage("SignatureReferencePullDataStore failed \n");
+		return 1;
+	}
 
 #if DEBUG
-    db_sigref_object_count=array_length;
+	db_sigref_object_count=array_length;
 #endif
-    
-    if( array_length > 0 )
-    {
-        if( (SignatureReferenceCacheUpdateDBid(dbSigRefArray,
-					       array_length,
-					       cacheHead,
-					       data->mc.cacheSignatureHead,
-					       data->mc.cacheSystemHead)))
-        {
-	    if( dbSigRefArray != NULL)
-            {
-                free(dbSigRefArray);
-                dbSigRefArray = NULL;
-                array_length = 0;
-            }
-	    
-            LogMessage("[%s()], Call to SignatureReferenceCacheUpdateDBid() failed \n",
-                       __FUNCTION__);
-            return 1;
-        }
-	
-        if(dbSigRefArray != NULL)
-        {
-            free(dbSigRefArray);
-            dbSigRefArray = NULL;
-        }
-        array_length = 0;
-    }
-    
-    if( (SignatureReferencePopulateDatabase(data,*cacheHead)))
-    {
-	/* XXX */
-	return 1;
-    }
-    
-    //Ze done.
-    return 0;
+
+	if( array_length > 0 ) {
+		if( (SignatureReferenceCacheUpdateDBid(dbSigRefArray,
+						array_length,
+						cacheHead,
+						data->mc.cacheSignatureHead,
+						data->mc.cacheSystemHead)))
+		{
+			if( dbSigRefArray != NULL) {
+				free(dbSigRefArray);
+				dbSigRefArray = NULL;
+				array_length = 0;
+			}
+
+			LogMessage("[%s()], Call to SignatureReferenceCacheUpdateDBid() failed \n",
+					__FUNCTION__);
+			return 1;
+		}
+
+		if(dbSigRefArray != NULL) {
+			free(dbSigRefArray);
+			dbSigRefArray = NULL;
+		}
+		array_length = 0;
+	}
+
+	if( (SignatureReferencePopulateDatabase(data,*cacheHead))) {
+		/* XXX */
+		return 1;
+	}
+
+	return 0;
 }
 /***********************************************************************************************SIGREF API*/
 
@@ -5677,12 +4526,12 @@ u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data)
 	/* XXX */
 	return 1;
     }
-    
-    if( (ConvertSignatureCache(BcGetSigNodeHead(),&data->mc,data)))
+
+/*GREG    if( (ConvertSignatureCache(BcGetSigNodeHead(),&data->mc,data)))
     {
-	/* XXX */
 	return 1;
     }
+*/
     
     return 0;
 }
@@ -5840,16 +4689,6 @@ u_int32_t CacheSynchronize(DatabaseData *data)
 	return 1;
     }
     
-    //Signature Synchronize
-    if( (SignatureCacheSynchronize(data,&data->mc.cacheSignatureHead)))
-    {
-	/* XXX */
-	LogMessage("[%s()]:, SignatureCacheSynchronize() call failed. \n",
-		   __FUNCTION__);
-	return 1;
-    }
-    
-    
     //System Synchronize
     if(data->mc.cacheSystemHead != NULL)
     {
@@ -5860,18 +4699,17 @@ u_int32_t CacheSynchronize(DatabaseData *data)
 		       __FUNCTION__);
 	    return 1;
 	}
-	
-	if(!data->dbRH[data->dbtype_id].disablesigref)
+//GREG	
+/*	if(!data->dbRH[data->dbtype_id].disablesigref)
 	{
 	    //SigRef Synchronize 
 	    if( (SigRefSynchronize(data,&data->mc.cacheSigReferenceHead,data->mc.cacheSignatureHead)))
 	    {
-		/* XXX */
 		LogMessage("[%s()]: SigRefSynchronize() call failed \n",
 			   __FUNCTION__);
 		return 1;
 	    }
-	}
+	}*/
     }
     else
     {
