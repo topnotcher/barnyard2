@@ -1580,39 +1580,12 @@ static void InitNetmasks(void)
     if (netmasks == NULL)
         netmasks = (uint32_t *)SnortAlloc(33 * sizeof(uint32_t));
 
-    netmasks[0]  = 0x00000000;
-    netmasks[1]  = 0x80000000;
-    netmasks[2]  = 0xC0000000;
-    netmasks[3]  = 0xE0000000;
-    netmasks[4]  = 0xF0000000;
-    netmasks[5]  = 0xF8000000;
-    netmasks[6]  = 0xFC000000;
-    netmasks[7]  = 0xFE000000;
-    netmasks[8]  = 0xFF000000;
-    netmasks[9]  = 0xFF800000;
-    netmasks[10] = 0xFFC00000;
-    netmasks[11] = 0xFFE00000;
-    netmasks[12] = 0xFFF00000;
-    netmasks[13] = 0xFFF80000;
-    netmasks[14] = 0xFFFC0000;
-    netmasks[15] = 0xFFFE0000;
-    netmasks[16] = 0xFFFF0000;
-    netmasks[17] = 0xFFFF8000;
-    netmasks[18] = 0xFFFFC000;
-    netmasks[19] = 0xFFFFE000;
-    netmasks[20] = 0xFFFFF000;
-    netmasks[21] = 0xFFFFF800;
-    netmasks[22] = 0xFFFFFC00;
-    netmasks[23] = 0xFFFFFE00;
-    netmasks[24] = 0xFFFFFF00;
-    netmasks[25] = 0xFFFFFF80;
-    netmasks[26] = 0xFFFFFFC0;
-    netmasks[27] = 0xFFFFFFE0;
-    netmasks[28] = 0xFFFFFFF0;
-    netmasks[29] = 0xFFFFFFF8;
-    netmasks[30] = 0xFFFFFFFC;
-    netmasks[31] = 0xFFFFFFFE;
-    netmasks[32] = 0xFFFFFFFF;
+	uint32_t sub = 0xFFFFFFFF;
+	int i;
+	for (i = 0; i <= 32; ++i) {
+		netmasks[i] = 0xFFFFFFFF - sub;
+		sub -= 1<<(32-i-1);
+	}
 }
 
 /****************************************************************************
