@@ -52,6 +52,7 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 /* SIGNATURE FUNCTIONS */
 static u_int32_t SignatureLookupCache(SigNode * cacheHead, dbSignatureObj * lookup);
 static u_int32_t dbSignatureObjEquals(dbSignatureObj const * const sig1,dbSignatureObj const * const sig2);
+static u_int32_t SignatureCacheLazyInit(MasterCache * mc, khash_t(dbSigCacheNode) ** cache, u_int32_t gid);
 
 /* SIGNATURE FUNCTIONS */
 
@@ -150,24 +151,38 @@ static u_int32_t dbSignatureObjEquals(dbSignatureObj const * const sig1,dbSignat
 
 	return 1;
 }
+
 /**
- * @TODO: this would be easier if we searched for a struct.
+ * Lookup a signature in the DB cache.
+ *
+ * @param iMasterCache the master database cache
+ * @param lookup the signature to lookup 
+ *
+ * @return 0 if the signature is found; 1 for not found/error
+ *
+ * Side effects: lookup->db_id is set to the id of the sig in the DB.
  */
-u_int32_t SignatureLookupDbCache(cacheSignatureObj * iHead, dbSignatureObj * lookup) { 
-	if (iHead == NULL || lookup == NULL)
+u_int32_t SignatureLookupDbCache(MasterCache * mc, dbSignatureObj * lookup) { 
+	if (mc == NULL || lookup == NULL)
 		return 1;
 
-	cacheSignatureObj const * cur = iHead;
-	while (cur != NULL) {
-		if (dbSignatureObjEquals(&cur->obj, lookup)) {
-			lookup->db_id = cur->obj.db_id;
+	khash_t(dbSigCacheNode) * cache = NULL;
+
+	if (SignatureCacheLazyInit(mc, &cache, lookup->gid) || cache == NULL)
+		return 1;
+
+	khint_t k = kh_get(dbSigCacheNode, cache, lookup->sid);
+
+	if (k == kh_end(cache)) {
+		return 1;
+	} else {
+		if (dbSignatureObjEquals(&kh_value(cache,k), lookup)) {
+			lookup->db_id = kh_value(cache, k).db_id;
 			return 0;
+		} else {
+			return 1;
 		}
-
-		cur = cur->next;
 	}
-
-	return 1;
 }
 
 u_int32_t cacheEventClassificationLookup(cacheClassificationObj *iHead,u_int32_t iClass_id)
@@ -470,21 +485,69 @@ u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificatio
     return 0;
 }
 
-u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache) {
-	cacheSignatureObj *TobjNode = NULL;
+static u_int32_t SignatureCacheLazyInit(MasterCache * mc, khash_t(dbSigCacheNode) ** cache, u_int32_t gid) {
 
-	if(iMasterCache == NULL || iSigObj == NULL)
+	if (mc == NULL)
 		return 1;
 
-	if((TobjNode = SnortAlloc(sizeof(cacheSignatureObj))) == NULL)
+	khint_t k;
+	int ret;
+
+	if (mc->cacheSignatureHead == NULL)
+		mc->cacheSignatureHead = kh_init(dbSigCache);
+
+	//see if the dbSigCacheNode exists for this gid.
+	k = kh_get(dbSigCache,mc->cacheSignatureHead, gid);
+	if (k == (kh_end(mc->cacheSignatureHead))) {
+		k = kh_put(dbSigCache, mc->cacheSignatureHead, gid, &ret);
+
+		if (ret == -1) {
+			return 1;
+
+		//@TODO should this handle ret == 2? 
+		//ret == 1 is expected? 
+		//0 should never happen due to previous check
+		//2 should never happen either
+		} else {
+			khash_t(dbSigCacheNode) * node = kh_init(dbSigCacheNode);
+			kh_value(mc->cacheSignatureHead, k) = node;
+			*cache = node;
+		}
+	} else {
+		*cache = kh_value(mc->cacheSignatureHead,k);
+	}
+
+	return 0;
+}
+
+u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache * mc) {
+	dbSignatureObj * cacheSigObj = NULL;
+	khash_t(dbSigCacheNode) * cache = NULL;
+
+	if (mc == NULL || iSigObj == NULL)
 		return 1;
 
-	memcpy(&TobjNode->obj,iSigObj,sizeof(dbSignatureObj));
+	if (SignatureCacheLazyInit(mc, &cache, iSigObj->gid) || cache == NULL)
+		return 1;	
 
-	TobjNode->flag ^= CACHE_BOTH;
+	khint_t k;
+	int ret;
+	k = kh_get(dbSigCacheNode, cache, iSigObj->sid);
 
-	TobjNode->next = iMasterCache->cacheSignatureHead;
-	iMasterCache->cacheSignatureHead = TobjNode;
+	//this sid is in not present in the cache
+	if (k == kh_end(cache)) {
+		k = kh_put(dbSigCacheNode, cache, iSigObj->sid, &ret);
+
+		if (ret == -1) {
+			return 1;
+		}
+	} 
+
+	//either it was already present, or we added the key; 
+	//either way we just overwrite what is there.
+	cacheSigObj = &kh_value(cache, k);
+
+	memcpy(cacheSigObj,iSigObj,sizeof(dbSignatureObj));
 
 	return 0;
 }
@@ -1370,6 +1433,8 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
  *
  * @return 0 found
  * @return 1 not found / error
+ * 
+ * Side effects: When found, lookup->message is populated with the message.
  */
 static u_int32_t SignatureLookupCache(SigNode * cacheHead, dbSignatureObj * lookup) {
 	if (cacheHead == NULL || lookup == NULL)
@@ -1610,7 +1675,7 @@ TransactionFail:
 u_int32_t SignatureLookup(DatabaseData * data, dbSignatureObj * lookup) {
 	u_int32_t db_sig_id = 0;
 
-	if (SignatureLookupDbCache(data->mc.cacheSignatureHead, lookup) == 0) {
+	if (SignatureLookupDbCache(&data->mc, lookup) == 0) {
 		db_sig_id = lookup->db_id;
 	} else if (SignatureLookupDatabase(data,lookup) == 0) {
 			db_sig_id = lookup->db_id;
@@ -3185,7 +3250,6 @@ func_fail:
 
 /***********************************************************************************************SIGREF API*/
 
-
 /***********************************************************************************************SIGREF API*/
 
 
@@ -3237,7 +3301,6 @@ u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data)
 void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag)
 {
 
-    cacheSignatureObj *MCcacheSignature;
     cacheClassificationObj *MCcacheClassification;
     cacheSignatureReferenceObj *MCcacheSigReference;
     cacheReferenceObj *MCcacheReference;
@@ -3253,38 +3316,22 @@ void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag)
     }
 
 
-    /* Just clean the array's. */
-    if( (flushFlag & CACHE_FLUSH_SIGREF) &&
-	(!(flushFlag & CACHE_FLUSH_SIGNATURE)) &&
-	(data->mc.cacheSignatureHead != NULL))
-    {
-	MCcacheSignature = data->mc.cacheSignatureHead;
+	/* Just clean the array's. */
+	/* @TODO why is this not a separate function? */
+	/* @TODO I deleted sig ref caching from this. */
+	if( (data->mc.cacheSignatureHead != NULL) && (flushFlag & CACHE_FLUSH_SIGNATURE)) {
+		khint_t k;
 
-        while( MCcacheSignature != NULL)
-        {
-	    MCcacheSignature->obj.ref_count = 0;
-	    memset(MCcacheSignature->obj.ref,'\0',(sizeof(cacheReferenceObj *) * MAX_REF_OBJ));
-	    MCcacheSignature= MCcacheSignature->next;
+		for (k = kh_begin(data->mc.cacheSignatureHead); k != kh_end(data->mc.cacheSignatureHead); ++k) {
+			if (kh_exist(data->mc.cacheSignatureHead,k)) {
+				kh_destroy(dbSigCacheNode, kh_value(data->mc.cacheSignatureHead,k));
+			}
+		}
+
+		kh_destroy(dbSigCache, data->mc.cacheSignatureHead);
+		data->mc.cacheSignatureHead = NULL;
+
 	}
-    }
-    
-    if( (data->mc.cacheSignatureHead != NULL) &&
-	(flushFlag & CACHE_FLUSH_SIGNATURE))
-    {
-	MCcacheSignature = data->mc.cacheSignatureHead;
-	
-	while( MCcacheSignature != NULL)
-	{
-	    holder = (void *)MCcacheSignature->next;
-	    free(MCcacheSignature);
-	    MCcacheSignature = (cacheSignatureObj *)holder;	
-	}
-	
-	data->mc.cacheSignatureHead = NULL;
-    }
-    
-
-
 
     if( (data->mc.cacheClassificationHead!= NULL) &&
 	(flushFlag & CACHE_FLUSH_CLASSIFICATION))
@@ -3390,7 +3437,7 @@ u_int32_t CacheSynchronize(DatabaseData *data)
 		       __FUNCTION__);
 	    return 1;
 	}
-//GREG	
+//GREG	@TODO
 /*	if(!data->dbRH[data->dbtype_id].disablesigref)
 	{
 	    //SigRef Synchronize 

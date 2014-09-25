@@ -55,6 +55,7 @@
 #include "rules.h"
 #include "unified2.h"
 #include "util.h"
+#include "khash.h"
 
 #include "output-plugins/spo_database_cache.h"
 
@@ -267,14 +268,12 @@ typedef struct _dbSignatureObj
 
 } dbSignatureObj;
 
+//kh_dbSigCacheNode_t... khash_t(dbSigCacheNode)
+//Store the dbSignatureObjs by SID 
+KHASH_MAP_INIT_INT(dbSigCacheNode, dbSignatureObj)
 
-typedef struct _cacheSignatureObj
-{
-    dbSignatureObj obj;
-    u_int32_t flag; /* Where its at */
-    struct _cacheSignatureObj *next;
-    
-} cacheSignatureObj;
+//store kh_dbSigCacheNode_t by GID
+KHASH_MAP_INIT_INT(dbSigCache, khash_t(dbSigCacheNode)*)
 /* ------------------------------------------
  * SIGNATURE OBJ
  ------------------------------------------ */
@@ -291,7 +290,7 @@ typedef struct _cacheSignatureObj
 typedef struct _masterCache
 {
     cacheClassificationObj *cacheClassificationHead;
-    cacheSignatureObj *cacheSignatureHead;
+    khash_t(dbSigCache) * cacheSignatureHead;
     cacheSystemObj *cacheSystemHead;
     cacheSignatureReferenceObj *cacheSigReferenceHead;
 } MasterCache;
@@ -592,7 +591,7 @@ u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data);
 u_int32_t CacheSynchronize(DatabaseData *data);
 u_int32_t cacheEventClassificationLookup(cacheClassificationObj *iHead,u_int32_t iClass_id);
 u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache);
-u_int32_t SignatureLookupDbCache(cacheSignatureObj * iHead, dbSignatureObj * lookup);
+u_int32_t SignatureLookupDbCache(MasterCache * mc, dbSignatureObj * lookup);
 u_int32_t SignaturePopulateDatabase(DatabaseData  *data,dbSignatureObj *sig,int inTransac);
 u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj);
 u_int32_t SignatureLookup(DatabaseData * data, dbSignatureObj * lookup);
