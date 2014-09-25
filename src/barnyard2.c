@@ -1435,6 +1435,8 @@ Barnyard2Config * Barnyard2ConfNew(void)
 {
     Barnyard2Config *bc = (Barnyard2Config *)SnortAlloc(sizeof(Barnyard2Config));
 
+	memset(bc, 0, sizeof(Barnyard2Config));
+
     bc->user_id = -1;
     bc->group_id = -1;
 

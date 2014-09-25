@@ -233,6 +233,9 @@ int spoolerClose(Spooler *spooler)
     /* free record */
     spoolerFreeRecord(&spooler->record);
 
+	//avoid a possible double free!
+	UnRegisterSpooler(spooler);
+
     free(spooler);
     spooler = NULL;
 
@@ -244,8 +247,8 @@ void RegisterSpooler(Spooler *spooler)
     Barnyard2Config *bc =  BcGetConfig();
     
     if(!bc)
-	return;
-    
+		return;
+		
     
     if(bc->spooler)
     {
@@ -261,23 +264,14 @@ void RegisterSpooler(Spooler *spooler)
     return;
 }
 
-void UnRegisterSpooler(Spooler *spooler)
-{
+void UnRegisterSpooler(Spooler *spooler) {
     Barnyard2Config *bc =  BcGetConfig();
 
-    if(!bc)
-	return;
+    if (!bc)
+		return;
     
-    if(bc->spooler != spooler)
-    {
-	/* XXX */
-	FatalError("[%s()], can't un-register spooler. \n",
-		   __FUNCTION__);
-    }
-    else
-    {
-	bc->spooler = NULL;
-    }
+    if(bc->spooler == spooler)
+		bc->spooler = NULL;
 
     return;
 }
