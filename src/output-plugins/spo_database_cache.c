@@ -50,7 +50,7 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 /* CLASSIFICATION FUNCTIONS */
 
 /* SIGNATURE FUNCTIONS */
-static u_int32_t SignatureLookupCache(SigNode * cacheHead, dbSignatureObj * lookup);
+static u_int32_t SignatureLookupCache(dbSignatureObj * lookup);
 static u_int32_t dbSignatureObjEquals(dbSignatureObj const * const sig1,dbSignatureObj const * const sig2);
 static u_int32_t SignatureCacheLazyInit(MasterCache * mc, khash_t(dbSigCacheNode) ** cache, u_int32_t gid);
 
@@ -78,7 +78,6 @@ u_int32_t SystemCacheSynchronize(DatabaseData *data,cacheSystemObj **cacheHead);
 /* Init FUNCTIONS */
 u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data);
 u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCache,DatabaseData *data);
-u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,DatabaseData *data);
 u_int32_t CacheSynchronize(DatabaseData *data);
 /* Init FUNCTIONS */
 
@@ -1436,25 +1435,20 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
  * 
  * Side effects: When found, lookup->message is populated with the message.
  */
-static u_int32_t SignatureLookupCache(SigNode * cacheHead, dbSignatureObj * lookup) {
-	if (cacheHead == NULL || lookup == NULL)
+static u_int32_t SignatureLookupCache(dbSignatureObj * lookup) {
+	if (lookup == NULL)
 		return 1;
 
-	SigNode * cur = cacheHead;		
-	int found = 0;
-	while (cur != NULL) {
-		//this does not really account for sidmapv1... hah fuck that shit!
-		//@TODO make the dbSignatureObj contain a SigNode then append the
-		//db_id to that so I can do equality nicer.
-		if (cur->generator == lookup->gid && cur->id == lookup->sid 
-				&& cur->rev == lookup->rev && cur->priority == lookup->priority_id
-				&& cur->class_id == lookup->class_id) {
-			found = 1;
-			strncpy(lookup->message, cur->msg, SIG_MSG_LEN); 
-		}
-		cur = cur->next;
+	SigNode * node = GetSigByGidSid(lookup->gid, lookup->sid, lookup->rev);
+
+	//@TODO think about this
+	//@TODO previously this checked priority/class_id too. Think about this too.
+	if (node->source_file != SOURCE_GEN_RUNTIME) {
+		strncpy(lookup->message, node->msg, SIG_MSG_LEN); 
+		return 0;
+	} else {
+		return 1;
 	}
-	return !found;
 }
 
 
@@ -1687,7 +1681,7 @@ u_int32_t SignatureLookup(DatabaseData * data, dbSignatureObj * lookup) {
 		}
 	} else {
 		//returns 1 if not found.
-		if (SignatureLookupCache(*BcGetSigNodeHead(), lookup) != 0) {
+		if (SignatureLookupCache(lookup) != 0) {
 			if (SnortSnprintf(lookup->message,SIG_MSG_LEN,"Snort Alert [%u:%u:%u]",
 						lookup->gid,lookup->sid,lookup->rev)) {
 				return 0;

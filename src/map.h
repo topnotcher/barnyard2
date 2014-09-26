@@ -46,6 +46,8 @@
 #include <sys/types.h>
 #include "sf_types.h"
 
+#include "khash.h"
+
 #define BUGTRAQ_URL_HEAD   "http://www.securityfocus.com/bid/"
 #define CVE_URL_HEAD       "http://cve.mitre.org/cgi-bin/cvename.cgi?name="
 #define ARACHNIDS_URL_HEAD "http://www.whitehats.com/info/IDS"
@@ -90,9 +92,10 @@ typedef struct _ClassType
 
 } ClassType;
 
+//@TODO make these fields match everywhere;
+//generator -> gid; id -> sid etc.
 typedef struct _SigNode
 {
-    struct _SigNode		*next;
     uint32_t			generator;	/* generator ID */
     uint32_t			id;		/* Snort ID */
     uint32_t			rev;		/* revision (for future expansion) */
@@ -105,6 +108,10 @@ typedef struct _SigNode
 
 } SigNode;
 
+KHASH_MAP_INIT_INT(_SidMsgMap, SigNode);
+typedef khash_t(_SidMsgMap) SidMsgMap; 
+KHASH_MAP_INIT_INT(_SidGidMsgMap,SidMsgMap*);
+typedef khash_t(_SidGidMsgMap) SidGidMsgMap; 
 
 #define SS_SINGLE 0x0001
 #define SS_RANGE  0x0002
@@ -126,7 +133,7 @@ ReferenceSystemNode * ReferenceSystemLookup(ReferenceSystemNode *, char *);
 ReferenceNode * AddReference(struct _Barnyard2Config *, ReferenceNode **, char *, char *);
 
 SigNode *GetSigByGidSid(uint32_t, uint32_t, uint32_t);
-SigNode *CreateSigNode(SigNode **,u_int8_t);
+SigNode *CreateSigNode(SidGidMsgMap *gidsidmap,SigNode *sn);
 
 ClassType * ClassTypeLookupByType(struct _Barnyard2Config *, char *);
 ClassType * ClassTypeLookupById(struct _Barnyard2Config *, int);
@@ -135,7 +142,7 @@ int ReadReferenceFile(struct _Barnyard2Config *, const char *);
 int ReadClassificationFile(struct _Barnyard2Config *);
 int ReadSidFile(struct _Barnyard2Config *);
 int ReadGenFile(struct _Barnyard2Config *);
-int SignatureResolveClassification(ClassType *class,SigNode *sig,char *sid_map_file,char *classification_file);
+int SignatureResolveClassification(ClassType *class,SidGidMsgMap * sigs, char *sid_map_file,char *classification_file);
 
 void DeleteReferenceSystems(struct _Barnyard2Config *);
 void DeleteReferences(struct _Barnyard2Config *);
@@ -146,7 +153,7 @@ void ParseSidMapLine(struct _Barnyard2Config *, char *);
 void ParseGenMapLine(char *);
 
 /* Destructors */
-void FreeSigNodes(SigNode **);
+void FreeSigNodes(SidGidMsgMap **);
 void FreeClassifications(ClassType **);
 void FreeReferences(ReferenceSystemNode **);
 void FreeSigSuppression(SigSuppress_list **);

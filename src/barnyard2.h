@@ -393,7 +393,7 @@ typedef struct _Barnyard2Config
     
     ClassType *classifications;
     ReferenceSystemNode *references;
-    SigNode *sigHead;  /* Signature list Head */
+    SidGidMsgMap *sigHead;  /* Signature list Head */
     
     /* plugin active flags*/
     InputConfig *input_configs;
@@ -757,9 +757,13 @@ static INLINE short BcSidMapVersion(void)
     return barnyard2_conf->sidmap_version;
 }
 
-static INLINE SigNode ** BcGetSigNodeHead(void)
+static INLINE SidGidMsgMap * BcGetSigNodeHead(void)
 {
-    return &barnyard2_conf->sigHead;
+	//@TODO could probably allocate this on startup?
+	if (barnyard2_conf->sigHead == NULL)
+		barnyard2_conf->sigHead = kh_init(_SidGidMsgMap);	
+
+    return barnyard2_conf->sigHead;
 }
 
 static INLINE Barnyard2Config * BcGetConfig(void)

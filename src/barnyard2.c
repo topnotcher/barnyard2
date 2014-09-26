@@ -1997,7 +1997,7 @@ static void Barnyard2Init(int argc, char **argv)
     if(barnyard2_conf->sidmap_version == SIDMAPV2)
     {
 	if(SignatureResolveClassification(barnyard2_conf->classifications,
-					  (SigNode *)*BcGetSigNodeHead(),
+					  BcGetSigNodeHead(),
 					  barnyard2_conf->sid_msg_file,
 					  barnyard2_conf->class_file))
 	{
