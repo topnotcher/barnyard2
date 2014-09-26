@@ -92,19 +92,22 @@ typedef struct _ClassType
 
 } ClassType;
 
-//@TODO make these fields match everywhere;
-//generator -> gid; id -> sid etc.
-typedef struct _SigNode
-{
-    uint32_t			generator;	/* generator ID */
-    uint32_t			id;		/* Snort ID */
-    uint32_t			rev;		/* revision (for future expansion) */
-    uint32_t			class_id;
-    uint32_t			priority;	
-    u_int8_t                    source_file;     /* where was it parsed from */
-    char                        *classLiteral;  /* sid-msg.map v2 type only */
-    char			*msg;		/* messages */
-    ReferenceNode		*refs;		/* references (eg bugtraq) */
+typedef uint32_t sig_gid_t;
+typedef uint32_t sig_sid_t;
+typedef uint32_t sig_rev_t;
+typedef uint32_t sig_class_id_t;
+typedef uint32_t sig_priority_id_t;
+
+typedef struct _SigNode {
+	sig_gid_t gid;
+	sig_sid_t sid;
+	sig_rev_t rev;
+	sig_class_id_t class_id;
+	sig_priority_id_t priority_id;
+	u_int8_t source_file; /* where was it parsed from */
+	char *classLiteral;  /* sid-msg.map v2 type only */
+	char *msg; /* messages */
+	ReferenceNode		*refs; /* references (eg bugtraq) */
 
 } SigNode;
 

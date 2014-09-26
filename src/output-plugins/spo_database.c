@@ -2111,9 +2111,9 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
        do not set a revision, in our context we will not log it to the database
        and print a informative messsage 
     */
-    u_int32_t sid = 0;
-    u_int32_t gid = 0;
-    u_int32_t revision = 0;
+    sig_sid_t sid = 0;
+    sig_gid_t gid = 0;
+    sig_rev_t revision = 0;
     u_int32_t event_id = 0;
     u_int32_t event_second = 0;
     u_int32_t event_microsecond = 0;

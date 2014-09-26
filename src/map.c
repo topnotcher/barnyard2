@@ -583,12 +583,12 @@ int SignatureResolveClassification(ClassType *class,SidGidMsgMap *sigs,char *sid
 								"Signature [gid: %d] [sid : %d] [revision: %d] message [%s] has no classification [%s] defined, signature priority is [%d]\n\n",
 								__FUNCTION__,
 								BcGetSourceFile(sig->source_file),
-								sig->generator,
-								sig->id,
+								sig->gid,
+								sig->sid,
 								sig->rev,
 								sig->msg,
 								sig->classLiteral,
-								sig->priority););
+								sig->priority_id););
 
 				}
 				else if( (found = ClassTypeLookupByTypePure(class,sig->classLiteral)) == NULL)
@@ -610,23 +610,23 @@ int SignatureResolveClassification(ClassType *class,SidGidMsgMap *sigs,char *sid
 								"Signature [gid: %d] [sid : %d] [revision: %d] message [%s] has no classification literal defined, signature priority is [%d]\n\n",
 								__FUNCTION__,
 								BcGetSourceFile(sig->source_file),
-								sig->generator,
-								sig->id,
+								sig->gid,
+								sig->sid,
 								sig->rev,
 								sig->msg,
-								sig->priority););
+								sig->priority_id););
 				}
 			}
 
-			if(sig->priority == 0)
+			if(sig->priority_id == 0)
 			{
 				if(found)
-					sig->priority = found->priority;
+					sig->priority_id = found->priority;
 			}
 			else
 			{
 				if( (found) &&
-						(found->priority != sig->priority))
+						(found->priority != sig->priority_id))
 				{
 					DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
 								"\nINFO: [%s()],In file [%s]\n"
@@ -634,16 +634,16 @@ int SignatureResolveClassification(ClassType *class,SidGidMsgMap *sigs,char *sid
 								"The priority define by the rule will overwride classification [%s] priority [%d] defined in [%s] using [%d] as priority \n\n",
 								__FUNCTION__,
 								BcGetSourceFile(sig->source_file),
-								sig->generator,
-								sig->id,
+								sig->gid,
+								sig->sid,
 								sig->rev,
 								sig->msg,
 								sig->classLiteral,
-								sig->priority,
+								sig->priority_id,
 								found->type,
 								found->priority,
 								classification_file,
-								sig->priority););
+								sig->priority_id););
 				}
 			}
 
@@ -789,8 +789,8 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data) {
 				switch(i)
 				{
 				case 0: /* sid */
-					t_sn.generator = 1;
-					if ((t_sn.id = strtoul(idx, NULL, 10)) == ULONG_MAX) {
+					t_sn.gid = 1;
+					if ((t_sn.sid = strtoul(idx, NULL, 10)) == ULONG_MAX) {
 						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
 								__FUNCTION__,
 								strerror(errno),
@@ -817,7 +817,7 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data) {
 				switch(i)
 				{
 				case 0: /*gid */
-					if ((t_sn.generator = strtoul(idx,NULL,10)) == ULONG_MAX) {
+					if ((t_sn.gid = strtoul(idx,NULL,10)) == ULONG_MAX) {
 						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
 								__FUNCTION__,
 								strerror(errno),
@@ -827,7 +827,7 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data) {
 					break;
 
 				case 1: /* sid */
-					if ((t_sn.id = strtoul(idx, NULL, 10)) == ULONG_MAX) {
+					if ((t_sn.sid = strtoul(idx, NULL, 10)) == ULONG_MAX) {
 						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
 								__FUNCTION__,
 								strerror(errno),
@@ -854,7 +854,7 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data) {
 
 				case 4: /* priority */
 
-					if( (t_sn.priority = strtoul(idx, NULL, 10)) == ULONG_MAX) {
+					if( (t_sn.priority_id = strtoul(idx, NULL, 10)) == ULONG_MAX) {
 						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
 								__FUNCTION__,
 								strerror(errno),
@@ -948,9 +948,9 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision) {
 		sn = &kh_value(map,k);
 
 		if (BcSidMapVersion() == SIDMAPV2) {
-			if (sn->generator == gid && sn->id == sid && sn->rev == revision)
+			if (sn->gid == gid && sn->sid == sid && sn->rev == revision)
 				return sn;
-		} else if (sn->generator == gid && sn->id == sid) {
+		} else if (sn->gid == gid && sn->sid == sid) {
 			return sn;
 		}
 	}
@@ -958,8 +958,8 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision) {
 	//sn was not returned => there was no match; create a default.
 
 	SigNode newdata = {
-		.id = sid, 
-		.generator = gid, 
+		.sid = sid, 
+		.gid = gid, 
 		.rev = revision,
 		.msg = (char *)SnortAlloc(42),
 		.source_file = SOURCE_GEN_RUNTIME
@@ -994,13 +994,13 @@ SigNode *CreateSigNode(SidGidMsgMap *gidsidmap,SigNode * sn) {
     if (gidsidmap == NULL) 
 		return NULL;
 
-	map = LazyInitSidMsgMap(gidsidmap, sn->generator);
+	map = LazyInitSidMsgMap(gidsidmap, sn->gid);
 
-	k = kh_get(_SidMsgMap, map, sn->id);
+	k = kh_get(_SidMsgMap, map, sn->sid);
 
 	//this sid is in not present in the cache
 	if (k == kh_end(map)) {
-		k = kh_put(_SidMsgMap, map, sn->id, &ret);
+		k = kh_put(_SidMsgMap, map, sn->sid, &ret);
 
 		if (ret == -1) {
 			return NULL;
@@ -1091,7 +1091,7 @@ void ParseGenMapLine(char *data) {
 
 		switch(i) {
 		case 0: /* gen */
-			if( (t_sn.generator = strtoul(idx, NULL, 10)) == ULONG_MAX) {
+			if( (t_sn.gid = strtoul(idx, NULL, 10)) == ULONG_MAX) {
 				FatalError("[%s()], error converting integer [%s] for line [%s] \n",
 						__FUNCTION__,
 						strerror(errno),
@@ -1100,7 +1100,7 @@ void ParseGenMapLine(char *data) {
 			break;
 
 		case 1: /* sid */
-			if( (t_sn.id = strtoul(idx, NULL, 10)) == ULONG_MAX) {
+			if( (t_sn.sid = strtoul(idx, NULL, 10)) == ULONG_MAX) {
 				FatalError("[%s()], error converting integer [%s] for line [%s] \n",
 						__FUNCTION__,
 						strerror(errno),
@@ -1124,7 +1124,7 @@ void ParseGenMapLine(char *data) {
 	switch(BcSidMapVersion()) {
 	case SIDMAPV1:
 		t_sn.rev = 1;
-		t_sn.priority = 0;
+		t_sn.priority_id = 0;
 		t_sn.classLiteral = strdup("NOCLASS"); /* default */
 		t_sn.class_id = 0;
 		break;
@@ -1136,7 +1136,7 @@ void ParseGenMapLine(char *data) {
 		t_sn.rev = 1;
 		t_sn.classLiteral = strdup("NOCLASS"); /* default */
 		t_sn.class_id = 0;
-		t_sn.priority = 3;
+		t_sn.priority_id = 3;
 		break;
 	}
 

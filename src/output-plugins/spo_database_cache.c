@@ -52,7 +52,7 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 /* SIGNATURE FUNCTIONS */
 static u_int32_t SignatureLookupCache(dbSignatureObj * lookup);
 static u_int32_t dbSignatureObjEquals(dbSignatureObj const * const sig1,dbSignatureObj const * const sig2);
-static u_int32_t SignatureCacheLazyInit(MasterCache * mc, khash_t(dbSigCacheNode) ** cache, u_int32_t gid);
+static u_int32_t SignatureCacheLazyInit(MasterCache * mc, khash_t(dbSigCacheNode) ** cache, sig_gid_t gid);
 
 /* SIGNATURE FUNCTIONS */
 
@@ -484,7 +484,7 @@ u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificatio
     return 0;
 }
 
-static u_int32_t SignatureCacheLazyInit(MasterCache * mc, khash_t(dbSigCacheNode) ** cache, u_int32_t gid) {
+static u_int32_t SignatureCacheLazyInit(MasterCache * mc, khash_t(dbSigCacheNode) ** cache, sig_gid_t gid) {
 
 	if (mc == NULL)
 		return 1;

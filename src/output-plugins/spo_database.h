@@ -254,11 +254,11 @@ typedef struct _cacheClassificationObj
 typedef struct _dbSignatureObj
 {
     u_int32_t db_id;
-    u_int32_t sid;
-    u_int32_t gid;
-    u_int32_t rev;
-    u_int32_t class_id;
-    u_int32_t priority_id;
+    sig_sid_t sid;
+    sig_gid_t gid;
+    sig_rev_t rev;
+    sig_class_id_t class_id;
+    sig_priority_id_t priority_id;
     char message[SIG_MSG_LEN];
     
     /* Eliminate alot of useless lookup */
