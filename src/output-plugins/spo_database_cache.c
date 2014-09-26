@@ -32,12 +32,8 @@
 #include "output-plugins/spo_database.h"
 #include "output-plugins/spo_database_cache.h"
 
+/* LOOKUP FUNCTIONS */
 u_int32_t cacheClassificationLookup(dbClassificationObj *iLookup,cacheClassificationObj *iHead);
-u_int32_t cacheSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead,cacheSystemObj **rcacheSystemObj);
-u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,cacheReferenceObj **retRefLookupNode);
-
-u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead);
-u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead);
 u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificationObj *iHead);
 /* LOOKUP FUNCTIONS */
 
@@ -56,22 +52,18 @@ static u_int32_t SignatureCacheLazyInit(MasterCache * mc, khash_t(dbSigCacheNode
 
 /* SIGNATURE FUNCTIONS */
 
-/* REFERENCE FUNCTIONS */
-u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,u_int32_t *array_length);
-u_int32_t ReferenceCacheUpdateDBid(dbReferenceObj *iDBList,u_int32_t array_length,cacheSystemObj **cacheHead);
-u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cacheHead);
-/* REFERENCE FUNCTIONS */
-
-/* SYSTEM FUNCTIONS */
-u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead);
-u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int32_t *array_length);
-u_int32_t SystemCacheUpdateDBid(dbSystemObj *iDBList,u_int32_t array_length,cacheSystemObj **cacheHead);
-u_int32_t SystemCacheSynchronize(DatabaseData *data,cacheSystemObj **cacheHead);
-/* SYSTEM FUNCTIONS */
-
 
 /* SIGNATURE REFERENCE FUNCTIONS */
-/* @TODO */
+static u_int32_t SignatureInsertReferences(DatabaseData * data, dbSignatureObj * sig);
+static u_int32_t SignatureInsertReference(DatabaseData * data, u_int32_t db_sig_id, int seq, ReferenceNode * ref);
+static u_int32_t ReferenceSystemLookupDbCache(MasterCache *mc, dbSystemObj * lookup);
+static u_int32_t ReferenceSystemCacheInsertObj(dbSystemObj * sys, MasterCache * mc );
+static u_int32_t DbReferenceSystemLookup(DatabaseData * data, dbSystemObj * lookup);
+static u_int32_t ReferenceSystemLookupDatabase(DatabaseData * data, dbSystemObj * lookup);
+static u_int32_t ReferenceSystemPopulateDatabase(DatabaseData * data, dbSystemObj * sys);
+static u_int32_t ReferenceLookup(DatabaseData * data, dbReferenceObj * ref);
+static u_int32_t ReferencePopulateDatabase(DatabaseData * data, dbReferenceObj * ref);
+static u_int32_t ReferenceLookupDatabase(DatabaseData * data, dbReferenceObj * lookup);
 /* SIGNATURE REFERENCE FUNCTIONS */
 
 
@@ -87,29 +79,14 @@ void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag);
 /* Destructor */
 
 /* Return largest string lenght */
-inline u_int32_t glsl(char *a,char *b)
-{
-    u_int32_t alen = 0;
-    u_int32_t blen = 0;
-    
-    alen = strlen(a);
-    blen = strlen(b);
-    
-    if(alen > blen)
-    {
-	return alen;
-    }
-    else if(alen < blen)
-    {
-	return blen;
-    }
-    if(alen == blen)
-    {
-	return alen;
-    }
+static inline u_int32_t glsl(char *a,char *b) {
+	u_int32_t alen = 0;
+	u_int32_t blen = 0;
 
-    abort();
-    return 0;
+	alen = strlen(a);
+	blen = strlen(b);
+
+	return (alen >= blen) ? alen : blen;
 }
 
 #if DEBUG
@@ -244,194 +221,6 @@ u_int32_t cacheClassificationLookup(dbClassificationObj *iLookup,cacheClassifica
     
     return 0;
 }
-
-/** 
- * Lookup for dbSystemObj in cacheSystemObj and also set rcacheSystemObj to found object.
- * 
- * @param iLookup 
- * @param iHead 
- * @param rcacheSystemObj 
- * 
- * @return 
- * 0 NOT FOUND
- * 1 FOUND
- */
-u_int32_t cacheSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead,cacheSystemObj **rcacheSystemObj)
-{
-    
-    if( (iLookup == NULL) ||
-	(rcacheSystemObj == NULL))
-    {
-        /* XXX */
-        FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] **rcacheSystemObj[0x%x]\n",
-                   __FUNCTION__,
-                   iLookup,
-                   iHead,
-	           rcacheSystemObj);
-    }
-    
-    while(iHead != NULL)
-    {
-        if( (memcmp(iLookup->ref_system_name,iHead->obj.ref_system_name,SYSTEM_NAME_LEN) == 0) &&
-	    (memcmp(iLookup->ref_system_url,iHead->obj.ref_system_url,SYSTEM_URL_LEN) == 0))
-	{
-            /* Match */
-	    *rcacheSystemObj = iHead;
-            return 1;
-        }
-
-        iHead = iHead->next;
-    }
-
-    return 0;
-}
-
-
-/** 
-  * Lookup for dbReferenceObj in cacheReferenceObj and also set retRefLookupNode found object.
- * 
- * @param iLookup 
- * @param iHead 
- * @param retRefLookupNode 
- * 
- * @return 
- * 0 NOT FOUND
- * 1 FOUND
- */
-u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,cacheReferenceObj **retRefLookupNode)
-{
-    if( (iLookup == NULL) ||
-	(retRefLookupNode == NULL))
-    {
-	/* XXX */
-	FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] \n",
-		   __FUNCTION__,
-		   iLookup,
-		   iHead);
-    }
-    
-    while(iHead != NULL)
-    {
-	if( (strncasecmp(iLookup->ref_tag,iHead->obj.ref_tag,
-			 glsl(iLookup->ref_tag,iHead->obj.ref_tag)) == 0))
-	{
-	    /* Match */
-	    *retRefLookupNode = iHead;
-	    return 1;
-	}
-	
-        iHead = iHead->next;
-    }
-    
-    return 0;
-} 
-
-/** 
- * Lookup for dbReferenceObj in cacheReferenceObj 
- * @note Only compare tag, from there assign system_id from parent node
- *       and reference id from lookup id.
- * @note Used in context db->internaCache lookup (if found remove CACHE_INTERNAL_ONLY and set CACHE_BOTH flag)
- *
- * @param iLookup 
- * @param iHead 
- * 
- * @return 
- * 0 NOT FOUND
- * 1 FOUND
- */
-u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead)
-{
-    if( (iLookup == NULL))
-    {
-        /* XXX */
-        FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj [0x%x] \n",
-                   __FUNCTION__,
-                   iLookup,
-                   iHead);
-    }
-    
-    if(iHead == NULL)
-    {
-        return 0;
-    }
-    
-    while(iHead != NULL)
-    {
-	if( (strncasecmp(iLookup->ref_tag,iHead->obj.ref_tag,
-			 glsl(iLookup->ref_tag,iHead->obj.ref_tag))) == 0)
-	{
-            /* Found */
-	    if(iHead->flag & CACHE_INTERNAL_ONLY)
-	    {
-		iHead->flag ^= (CACHE_INTERNAL_ONLY | CACHE_BOTH);
-	    }
-	    else
-	    {
-		iHead->flag ^= CACHE_BOTH;
-	    }
-	    
-	    iHead->obj.ref_id = iLookup->ref_id;
-	    iHead->obj.system_id = iHead->obj.parent->obj.db_ref_system_id;
-	    return 1;
-	}
-        iHead = iHead->next;
-    }
-    
-    return 0;
-}
-
-/** 
- * Lookup for dbSystemObj in cacheSystemeObj 
- * @note compare only reference name, assign system id from parent node if a match is found.
- * @note Used in context db->internaCache lookup (if found remove CACHE_INTERNAL_ONLY and set CACHE_BOTH flag)
- * @param iLookup 
- * @param iHead 
- * 
- * @return 
- * 0 NOT FOUND
- * 1 FOUND
- */
-u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead)
-{
-    if( (iLookup == NULL))
-    {
-        /* XXX */
-        FatalError("database [%s()], Called with dbSystemObj[0x%x] cacheSystemObj [0x%x] \n",
-                   __FUNCTION__,
-                   iLookup,
-                   iHead);
-    }
-    
-    if(iHead == NULL)
-    {
-        return 0;
-    }
-    
-    while(iHead != NULL)
-    {
-	if((strncasecmp(iLookup->ref_system_name,iHead->obj.ref_system_name, 
-			glsl(iLookup->ref_system_name,iHead->obj.ref_system_name))) == 0)
-	{
-            /* Found */
-	    if(  iHead->flag & CACHE_INTERNAL_ONLY)
-	    {
-		iHead->flag ^= (CACHE_INTERNAL_ONLY | CACHE_BOTH);
-	    }
-	    else
-	    {
-		iHead->flag ^= CACHE_BOTH;
-	    }
-
-	    iHead->obj.db_ref_system_id = iLookup->db_ref_system_id;
-            return 1;
-        }
-	
-	iHead = iHead->next;
-    }
-    
-    return 0;
-}
-
 
 /** 
  * Lookup for dbClassificationObj in cacheClassificationObj 
@@ -1538,7 +1327,6 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
 }
 
 
-
 /** 
  *  Populate the signature table with record that are not present in the database.
  * 
@@ -1636,6 +1424,11 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,dbSignatureObj * sig,int
 		sig->db_id = db_sig_id;
 	}
 
+	//Assumption: This is a new signature insertion, so the references also
+	//need to be inserted.
+	if (SignatureInsertReferences(data, sig))
+		goto TransactionFail;
+
 
 	if(inTransac == 0) {
 		if(CommitTransaction(data)) {
@@ -1651,6 +1444,339 @@ TransactionFail:
 	}
 
 	return 1;    
+}
+
+/**
+ * Insert a signature's references.
+ *
+ * @param data 
+ * @param sig signature to insert references for.
+ *
+ * @return 0 on success; 1 on error
+ */
+static u_int32_t SignatureInsertReferences(DatabaseData * data, dbSignatureObj * sig) {
+	SigNode * sn = GetSigByGidSid(sig->gid, sig->sid, sig->rev);
+
+	if (sn == NULL || sn->source_file == SOURCE_GEN_RUNTIME)
+		return 0;
+
+	ReferenceNode * cur = sn->refs;
+
+	int seq = 1;
+	while (cur != NULL) {
+		//@TODO do I even care about errors here?
+		if (SignatureInsertReference(data, sig->db_id, seq, cur))
+			return 1;
+
+		seq++;
+		cur = cur->next;
+	}
+
+	return 0;
+}
+
+/**
+ * Insert a single reference for a given signature, also inserting
+ * reference_system if necessary.
+ *
+ * @param data
+ * @param db_sig_id The ID# of the signature in the database
+ * @param seq Ordinal number representing the position of this reference in the
+ *        signature's reference list.
+ * @param ref The Reference to insert.
+ *
+ * @return 0 on success; 1 on error
+ */
+static u_int32_t SignatureInsertReference(DatabaseData * data, u_int32_t db_sig_id, int seq, ReferenceNode * ref) {
+	static dbSystemObj dbSys;
+	static dbReferenceObj dbRef;
+
+	memset(&dbSys, 0, sizeof dbSys);
+	memset(&dbRef, 0, sizeof dbRef);
+
+	if (ref->system == NULL)
+		return 1;
+
+	//@TODO it seems like <-- what were you saying here??
+	strncpy(dbSys.name, ref->system->name, SYSTEM_NAME_LEN);
+	strncpy(dbSys.url, ref->system->url, SYSTEM_URL_LEN);
+	//NOTE: this returns the db ID.
+	if (DbReferenceSystemLookup(data, &dbSys) == 0)
+		return 1;
+
+
+	strncpy(dbRef.ref_tag, ref->id, REF_TAG_LEN-1); 
+	dbRef.ref_tag[REF_TAG_LEN-1] = '\0';
+	dbRef.system_id = dbSys.db_ref_system_id;
+	//this returns the db id.
+	if (ReferenceLookup(data, &dbRef) == 0)
+		return 1;
+	
+	int res = SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH, SQL_INSERT_SIGREF, dbRef.ref_id, db_sig_id, seq);
+
+	if (res != SNORT_SNPRINTF_SUCCESS)
+		return 1; 
+
+	if (Insert(data->SQL_INSERT, data, 1))
+		return 1;
+
+	return 0;
+}
+
+/**
+ * Lookup a reference system in the db cache.
+ *
+ * @param mc
+ * @param lookup
+ *
+ * @return 0 on success; 1 on error
+ *
+ * Side effects: If the system is found in the cache, lookup->db_ref_system_id
+ * is updated.
+ */
+static u_int32_t ReferenceSystemLookupDbCache(MasterCache *mc, dbSystemObj * lookup) {
+	if (mc == NULL || lookup == NULL)
+		return 1;
+
+	cacheSystemObj * cur = mc->cacheSystemHead;	
+
+	while (cur != NULL) {
+		if (strncmp(cur->obj.name, lookup->name, SYSTEM_NAME_LEN) == 0
+				&& strncmp(cur->obj.url, lookup->url, SYSTEM_URL_LEN) == 0) {
+
+			lookup->db_ref_system_id = cur->obj.db_ref_system_id;
+			return 0;
+		}
+
+		cur = cur->next;
+	}
+
+	return 1;
+}
+
+/**
+ * Insert a reference system into the DB cache.
+ * 
+ * @param sys The system to insert
+ * @param mc The master cache
+ * 
+ * @return 0 on success; 1 on error
+ * @TODO the order of arguments is opposite ReferenceSystemLookupDbCache
+ */
+static u_int32_t ReferenceSystemCacheInsertObj(dbSystemObj * sys, MasterCache * mc ) {
+	cacheSystemObj * cache;
+
+	if (sys == NULL || mc == NULL)
+		return 1;
+
+	if ((cache = SnortAlloc(sizeof(*cache))) == NULL)
+		return 1;
+
+	memcpy(&cache->obj, sys, sizeof(cache->obj));
+	cache->next = mc->cacheSystemHead;
+	mc->cacheSystemHead = cache;
+
+	return 0;
+}
+
+/**
+ * Lookup a reference system id.
+ *
+ * @param data
+ * @param lookup The reference system (name,url) to lookup
+ *
+ * @return A database ID number (>0) on success; 0 on error.
+ *
+ * Side effects: If the reference system does not exist in the database, it
+ * will be added. In all successful cases, lookup->db_ref_system_id will be
+ * populated.
+ *
+ * @TODO fucking return values. SO FUCKING INCONSISTENT
+ * ... it was done this way to be consistent with SignatureLookup.
+ * Return the databse id on success; 0 on error.
+ * @TODO prefixed with DB due to name collision... Should do this for all of them probably
+ */
+static u_int32_t DbReferenceSystemLookup(DatabaseData * data, dbSystemObj * lookup) {
+	u_int32_t db_ref_system_id;
+
+	if (data == NULL || lookup == NULL)
+		return 0;
+
+	if (ReferenceSystemLookupDbCache(&data->mc, lookup) == 0) {
+		db_ref_system_id = lookup->db_ref_system_id;
+	} else if (ReferenceSystemLookupDatabase(data, lookup) == 0) {
+		db_ref_system_id = lookup->db_ref_system_id;	
+
+		if (ReferenceSystemCacheInsertObj(lookup, &data->mc)) {
+			//@TODO fuck it if it doesn't cache
+		}
+	} else {
+		if (ReferenceSystemPopulateDatabase(data,lookup)) {
+			return 0;
+		}
+		
+		if (ReferenceSystemCacheInsertObj(lookup,&data->mc)) {
+			//@TODO fuck it
+		}
+
+		db_ref_system_id = lookup->db_ref_system_id;
+	}
+
+	return db_ref_system_id;
+}
+
+/** 
+ * Lookup a reference system ID in the database.
+ *
+ * @param data
+ * @param lookup
+ * 
+ * @return 0 on success (found); 1 on error (or not found)
+ */
+static u_int32_t ReferenceSystemLookupDatabase(DatabaseData * data, dbSystemObj * lookup) {
+	u_int32_t db_ref_system_id = 0;
+	int res;
+
+	if (data == NULL || lookup == NULL)
+		return 1;
+	
+	res = SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH, 
+			SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM, lookup->name, lookup->url);
+
+	if (res != SNORT_SNPRINTF_SUCCESS)
+		return 1; 
+
+	if (Select(data->SQL_SELECT,data, &db_ref_system_id))
+		return 1;
+
+	if (db_ref_system_id == 0)
+		return 1;
+
+	lookup->db_ref_system_id = db_ref_system_id;
+
+	return 0;
+}
+
+/**
+ * Insert a reference system into the database. 
+ * 
+ * @param data
+ * @param sys
+ *
+ * @return 1 on error | 0 on success
+ *
+ * Side Effects: When successful, sys->db_ref_system_id will be populated with
+ * the id# of the inserted row.
+ */
+static u_int32_t ReferenceSystemPopulateDatabase(DatabaseData * data, dbSystemObj * sys) {
+
+	if (sys == NULL)
+		return 1;
+
+	//@TODO this escaping seems like a mess
+	//@TODO make a function to escape and query. 
+	if (snort_escape_string_STATIC(sys->name, SYSTEM_NAME_LEN, data))
+		return 1;
+
+	if (snort_escape_string_STATIC(sys->url, SYSTEM_URL_LEN, data))
+		return 1;
+
+	if (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH, 
+				SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM, 
+				sys->name, sys->url) != SNORT_SNPRINTF_SUCCESS)	
+		return 1;
+
+	if (Insert(data->SQL_INSERT, data, 1)) 
+		return 1;
+
+	return ReferenceSystemLookupDatabase(data, sys);
+}
+
+/**
+ * Lookup the DB id of a reference (system,tag). 
+ *
+ * @param data
+ * @param ref The reference to find in the DB.
+ *
+ * @return database ID on success; 0 on failure
+ * 
+ * Side effects: If not found in the DB, the reference is inserted. ref->ref_id
+ * will be poplulated.
+ */
+static u_int32_t ReferenceLookup(DatabaseData * data, dbReferenceObj * ref) {
+	if (data == NULL || ref == NULL)
+		return 0;
+
+	if (ReferenceLookupDatabase(data,ref) != 0) {
+		if (ReferencePopulateDatabase(data,ref)) {
+			return 0;
+		}
+	} 
+
+	return ref->ref_id;
+}
+
+/**
+ * Insert a reference into the database.
+ *
+ * @param data
+ * @param ref The reference to insert.
+ *
+ * @return 0 on success ; 1 on failure
+ *
+ * Side Effects: ref->ref_id will be populated if successful.
+ */
+static u_int32_t ReferencePopulateDatabase(DatabaseData * data, dbReferenceObj * ref) {
+	if (data == NULL || ref == NULL)
+		return 1;
+
+	//@TODO this god fucking damn escaping again
+	if (snort_escape_string_STATIC(ref->ref_tag, REF_TAG_LEN, data))
+		return 1;
+
+	if (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH, 
+				SQL_INSERT_SPECIFIC_REF, 
+				ref->system_id, ref->ref_tag) != SNORT_SNPRINTF_SUCCESS)	
+		return 1;
+
+	if (Insert(data->SQL_INSERT, data, 1)) 
+		return 1;
+
+	return ReferenceLookupDatabase(data, ref);
+}
+
+/**
+ * Lookup the database ID of a reference.
+ *
+ * @param data
+ * @param lookup a dbReferenceObj populated with the system_id and ref_tag to lookup.
+ *
+ * @return 0 on success ; 1 on failure
+ *
+ * Side Effects: If found, lookup->ref_id is populated with the database ID.
+ */
+static u_int32_t ReferenceLookupDatabase(DatabaseData * data, dbReferenceObj * lookup) {
+	u_int32_t db_ref_id = 0;
+	int res;
+
+	if (data == NULL || lookup == NULL)
+		return 1;
+	
+	res = SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH, 
+			SQL_SELECT_SPECIFIC_REF, lookup->system_id, lookup->ref_tag);
+
+	if (res != SNORT_SNPRINTF_SUCCESS)
+		return 1; 
+
+	if (Select(data->SQL_SELECT,data, &db_ref_id))
+		return 1;
+
+	if (db_ref_id == 0)
+		return 1;
+
+	lookup->ref_id = db_ref_id;
+
+	return 0;
 }
 
 /**
@@ -1708,1541 +1834,8 @@ u_int32_t SignatureLookup(DatabaseData * data, dbSignatureObj * lookup) {
 	return db_sig_id;
 }
 
-/***********************************************************************************************SYSTEM API*/
-/*
-** Those update system and reference 
-*/
-/***********************************************************************************************SYSTEM API*/
-
-/** 
- * Fetch Reference  from database
- * 
- * @param data 
- * @param iArrayPtr 
- * @param array_length 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,u_int32_t *array_length)
-{
-
-#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC))
-    u_int32_t curr_row = 0;
-#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC)) */        
-    
-#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))    
-    u_int32_t queryColCount =0;
-#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
-    
-#ifdef ENABLE_ODBC
-    dbReferenceObj tRefObj = {0};
-    SQLSMALLINT col_count = 0;
-#endif /* ENABLE_ODBC */
-
-#ifdef ENABLE_MYSQL
-    int result = 0;
-#endif
-
-#ifdef ENABLE_POSTGRESQL
-    char *pg_val = NULL;
-    int num_row = 0;
-    u_int32_t curr_col = 0;
-    u_int8_t pgStatus = 0;
-#endif /* ENABLE_POSTGRESQL */
-
-    
-    
-    if( (data == NULL) ||
-        ( ( iArrayPtr == NULL )  && ( *iArrayPtr != NULL )) ||
-        ( array_length == NULL))
-    {
-        /* XXX */
-        LogMessage("[%s()], Call failed DataBaseData[0x%x] dbSystemObj **[0x%x] u_int32_t *[0x%x] \n",
-                   __FUNCTION__,
-                   data,
-                   iArrayPtr,
-                   array_length);
-        return 1;
-    }
-
-    DatabaseCleanSelect(data);
-    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                       SQL_SELECT_ALL_REF) !=  SNORT_SNPRINTF_SUCCESS))
-    {
-        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
-                   __FUNCTION__);
-    }
-
-    if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
-    {
-        /* A This shouldn't happen since we are in failed transaction state */
-        /* XXX */
-        return 1;
-    }
-
-    if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
-    {
-        /* XXX */
-        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
-                   __FUNCTION__,
-                   data->SQL_SELECT);
-    }
-
-    switch(data->dbtype_id)
-    {
-#ifdef ENABLE_MYSQL
-	
-    case DB_MYSQL:
-	
-        result = mysql_query(data->m_sock,data->SQL_SELECT);
-	
-        switch(result)
-        {
-        case 0:
-            if( (data->m_result = mysql_store_result(data->m_sock)) == NULL)
-            {
-                /* XXX */
-                LogMessage("[%s()], Failed call to mysql_store_result \n",
-                           __FUNCTION__);
-                return 1;
-            }
-            else
-            {
-
-                MYSQL_ROW row = NULL;
-                my_ulonglong num_row = 0;
-                unsigned int i = 0;
-		
-                if( (num_row = mysql_num_rows(data->m_result)) > 0)
-                {
-                    if( (*iArrayPtr = SnortAlloc( (sizeof(dbReferenceObj) * num_row))) == NULL)
-                    {
-                        mysql_free_result(data->m_result);
-                        data->m_result = NULL;
-                        FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
-                                   __FUNCTION__);
-                    }
-                }
-                else
-                {
-                    /* XXX */
-                    free(*iArrayPtr);
-                    *iArrayPtr = NULL;
-                    mysql_free_result(data->m_result);
-                    data->m_result = NULL;
-                    LogMessage("[%s()]: No Reference found in database ... \n",
-                               __FUNCTION__);
-                    return 0;
-                }
-		
-                *array_length = num_row;
-		
-                queryColCount = mysql_num_fields(data->m_result);
-		
-                if(queryColCount != NUM_ROW_REF)
-                {
-                    /* XXX */
-                    free(*iArrayPtr);
-                    *iArrayPtr = NULL;
-                    mysql_free_result(data->m_result);
-                    data->m_result = NULL;
-                    LogMessage("[%s()] To many column returned by query [%u]...\n",
-                               __FUNCTION__,
-                               queryColCount);
-                    return 1;
-                }
-		
-                while ((curr_row < num_row) &&
-                       (row = mysql_fetch_row(data->m_result)))
-                {
-		    
-                    dbReferenceObj *cPtr = &(*iArrayPtr)[curr_row];
-		    
-                    for(i = 0; i < queryColCount; i++)
-                    {
-                        unsigned long *lengths={0};
-			
-                        if( (lengths = mysql_fetch_lengths(data->m_result)) == NULL)
-                        {
-                            free(*iArrayPtr);
-                            *iArrayPtr = NULL;
-                            mysql_free_result(data->m_result);
-                            data->m_result = NULL;
-                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
-                                       __FUNCTION__);
-                        }
-			
-                        if( (row[i] != NULL) )
-                        {
-                            switch (i)
-                            {
-
-                            case 0:
-                                cPtr->ref_id = strtoul(row[i],NULL,10);
-                                break;
-				
-                            case 1:
-				/* Do nothing for now but could be used to do a consistency check */
-				cPtr->system_id = strtoul(row[i],NULL,10);
-				break;
-				
-			    case 2:
-				strncpy(cPtr->ref_tag,row[i],REF_TAG_LEN);
-				cPtr->ref_tag[REF_TAG_LEN-1] = '\0'; //toasty.
-				
-				//Safety escape value.
-                                if( (snort_escape_string_STATIC(cPtr->ref_tag,REF_TAG_LEN,data)))
-                                {
-                                    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-                                               "[%s], Exiting. \n",
-                                               __FUNCTION__,
-                                               cPtr->ref_tag);
-                                }
-				
-
-				break;
-
-                            default:
-                                /* XXX */
-                                /* Should bail here... */
-                                break;
-                            }
-                        }
-                    }
-                    curr_row++;
-                }
-                
-		
-		mysql_free_result(data->m_result);
-                data->m_result = NULL;
-                return 0;
-            }
-            break;
-
-
-        case CR_COMMANDS_OUT_OF_SYNC:
-        case CR_SERVER_GONE_ERROR:
-        case CR_UNKNOWN_ERROR:
-        default:
-
-            if(checkTransactionState(data->dbRH))
-            {
-                LogMessage("[%s()]: Failed executing with error [%s], in transaction will Abort. \n Failed QUERY: [%s] \n",
-                           __FUNCTION__,
-                           mysql_error(data->m_sock),
-                           data->SQL_SELECT);
-                return 1;
-            }
-
-            LogMessage("[%s()]: Failed exeuting query [%s] , will retry \n",
-                       __FUNCTION__,
-                       data->SQL_SELECT);
-            break;
-
-        }
-
-        /* XXX */
-        return 1;
-        break;
-
-#endif /* ENABLE_MYSQL */
-
-#ifdef ENABLE_POSTGRESQL
-    case DB_POSTGRESQL:
-
-        data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
-
-        pgStatus = PQresultStatus(data->p_result);
-        switch(pgStatus)
-	{
-
-	case PGRES_TUPLES_OK:
-
-	    if( (num_row = PQntuples(data->p_result)))
-	    {
-
-		*array_length = num_row;
-
-		if( (queryColCount = PQnfields(data->p_result)) !=  NUM_ROW_REF)
-		{
-		    LogMessage("[%s()] To many column returned by query [%u]...\n",
-			       __FUNCTION__,
-			       queryColCount);
-		    PQclear(data->p_result);
-		    data->p_result = NULL;
-		    return 1;
-		}
-
-
-		if( (*iArrayPtr = SnortAlloc( (sizeof(dbReferenceObj) * num_row))) == NULL)
-		{
-		    if(data->p_result)
-		    {
-			PQclear(data->p_result);
-			data->p_result = NULL;
-		    }
-
-		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
-			       __FUNCTION__);
-		}
-
-		for(curr_row = 0 ; curr_row < num_row ; curr_row++)
-		{
-		    dbReferenceObj *cPtr = &(*iArrayPtr)[curr_row];
-
-		    for(curr_col = 0 ; curr_col < queryColCount ; curr_col ++)
-		    {
-			pg_val = NULL;
-			if( (pg_val = PQgetvalue(data->p_result,curr_row,curr_col)) == NULL)
-			{
-			    /* XXX */
-			    /* Something went wrong */
-			    PQclear(data->p_result);
-			    data->p_result = NULL;
-			    return 1;
-			}
-			switch(curr_col)
-			{
-			case 0:
-			    cPtr->ref_id = strtoul(pg_val,NULL,10);
-			    break;
-
-			case 1:
-			    /* Do nothing for now but could be used to do a consistency check */
-			    cPtr->system_id = strtoul(pg_val,NULL,10);
-			    break;
-
-			case 2:
-			    strncpy(cPtr->ref_tag,pg_val,REF_TAG_LEN);
-			    cPtr->ref_tag[REF_TAG_LEN-1] = '\0'; //toasty.
-			    
-			    //Safety escape value.
-			    if( (snort_escape_string_STATIC(cPtr->ref_tag,REF_TAG_LEN,data)))
-			    {
-				FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-					   "[%s], Exiting. \n",
-					   __FUNCTION__,
-					   cPtr->ref_tag);
-			    }
-
-
-			    break;
-
-			default:
-			    /* We should bail here*/
-			    break;
-			}
-		    }
-		}
-	    }
-	    else
-	    {
-		*array_length = 0;
-	    }
-
-
-	    if(data->p_result)
-	    {
-		PQclear(data->p_result);
-		data->p_result = NULL;
-	    }
-
-	    return 0;
-	    break;
-
-	default:
-	    if(PQerrorMessage(data->p_connection)[0] != '\0')
-	    {
-		ErrorMessage("ERROR database: postgresql_error: %s\n",
-			     PQerrorMessage(data->p_connection));
-		return 1;
-	    }
-	    break;
-	}
-
-	return 1;
-	break;
-
-#endif /* ENABLE_POSTGRESQL */
-
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-	if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
-	{
-	    if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)data->SQL_SELECT, SQL_NTS) == SQL_SUCCESS)
-            {
-		if( SQLNumResultCols(data->u_statement,&col_count) == SQL_SUCCESS)
-		{
-		    if(col_count ==  NUM_ROW_REF)
-		    {
-			if(SQLRowCount(data->u_statement, &data->u_rows) != SQL_SUCCESS)
-			{
-			    ODBCPrintError(data,SQL_HANDLE_STMT);
-			    FatalError("[%s()]: SQLRowCount() call failed \n",
-				       __FUNCTION__);
-			}
-			
-			if(data->u_rows)
-			{
-			    if( (*iArrayPtr = SnortAlloc( (sizeof(dbReferenceObj) * data->u_rows))) == NULL)
-			    {
-				goto ODBCError;
-			    }
-			    
-			    *array_length = data->u_rows;
-			    
-			}
-			else
-			{
-			    /* We have no records */
-			    *array_length = 0;
-			    return 0;
-			}
-			
-		    }
-		    else
-		    {
-			FatalError("[%s()]: The number of column returned does not match [%u] \n",
-				   __FUNCTION__,
-				   NUM_ROW_CLASSIFICATION);
-		    }
-		}
-		else
-		{
-		    LogMessage("[%s()]: SQLNumResultCols() call failed \n",
-			       __FUNCTION__);
-		    ODBCPrintError(data,SQL_HANDLE_STMT);
-		    goto ODBCError;
-		}
-	    }
-	    else
-	    {
-		LogMessage("[%s()]: SQLExecDirect() call failed \n",
-			   __FUNCTION__);
-		ODBCPrintError(data,SQL_HANDLE_STMT);
-		goto ODBCError;
-	    }
-	}
-	else
-	{
-	    LogMessage("[%s()]: SQLAllocStmt() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	SQLINTEGER col1_len = 0;
-	SQLINTEGER col2_len = 0;
-	SQLINTEGER col3_len = 0;
-	
-	/* Bind template object */
-	if( SQLBindCol(data->u_statement,1,SQL_C_LONG,&tRefObj.ref_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	if( SQLBindCol(data->u_statement,2,SQL_C_LONG,&tRefObj.system_id,sizeof(u_int32_t),&col2_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	if( SQLBindCol(data->u_statement,3,SQL_C_CHAR,&tRefObj.ref_tag,(sizeof(char) *REF_TAG_LEN) ,&col3_len) != SQL_SUCCESS)
-	{
-	    LogMessage("[%s()]: SQLBindCol() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-
-	for(curr_row = 0; curr_row < data->u_rows;curr_row++)
-	{
-	    dbReferenceObj *cPtr = &(*iArrayPtr)[curr_row];
-	    
-	    /* fetch */
-	    if( SQLFetch(data->u_statement) != SQL_SUCCESS)
-	    {
-		LogMessage("[%s()]: SQLFetch error on record [%u] \n",
-			   __FUNCTION__,
-			   curr_row+1);
-		ODBCPrintError(data,SQL_HANDLE_STMT);
-		goto ODBCError;
-	    }
-	    else
-	    {
-		if( (col1_len == SQL_NO_TOTAL || col1_len == SQL_NULL_DATA) ||
-		    (col2_len == SQL_NO_TOTAL || col2_len == SQL_NULL_DATA) ||
-		    (col3_len == SQL_NO_TOTAL || col3_len == SQL_NULL_DATA))
-		{
-		    FatalError("[%s()] Seem's like we have some null data ...\n",
-			       __FUNCTION__);
-		}
-		
-		/* Copy object */
-		if( (memcpy(cPtr,&tRefObj,sizeof(dbReferenceObj))) != cPtr)
-		{
-		    FatalError("[%s()] : memcpy error ..\n",
-			       __FUNCTION__);
-		}
-		
-		/* Clear temp obj */
-		memset(&tRefObj,'\0',sizeof(dbReferenceObj));
-	    }
-	}
-	
-
-	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-	return 0;
-	
-    ODBCError:
-
-	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-	return 1;
-	
-        break;
-#endif /* ENABLE_ODBC */
-
-#ifdef ENABLE_ORACLE
-    case DB_ORACLE:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-
-        break;
-#endif /* ENABLE_ORACLE */
-
-#ifdef ENABLE_MSSQL
-    case DB_MSSQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-#endif /* ENABLE_MSSQL */
-
-    default:
-
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-
-    }
-
-    return 0;
-}
-
-
-/** 
- * Fetch System from database
- * 
- * @param data 
- * @param iArrayPtr 
- * @param array_length 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int32_t *array_length)
-{
-
-#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC))
-    u_int32_t curr_row = 0;
-#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC)) */    
-
-#if (defined(ENABLE_ODBC))
-    dbSystemObj tSystemObj = {0};
-    SQLSMALLINT col_count = 0;
-#endif /* (defined(ENABLE_ODBC)) */
-    
-#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))    
-    u_int32_t queryColCount =0;
-#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
-    
-#ifdef ENABLE_MYSQL
-    int result = 0;
-#endif
-
-#ifdef ENABLE_POSTGRESQL
-    char *pg_val = NULL;
-    int num_row = 0;
-    u_int32_t curr_col = 0;
-    u_int8_t pgStatus = 0;
-#endif /* ENABLE_POSTGRESQL */
-
-
-    if( (data == NULL) ||
-        ( ( iArrayPtr == NULL )  && ( *iArrayPtr != NULL )) ||
-        ( array_length == NULL))
-    {
-        /* XXX */
-        LogMessage("[%s()], Call failed DataBaseData[0x%x] dbSystemObj **[0x%x] u_int32_t *[0x%x] \n",
-                   __FUNCTION__,
-                   data,
-                   iArrayPtr,
-                   array_length);
-        return 1;
-    }
-
-    DatabaseCleanSelect(data);
-    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                       SQL_SELECT_ALL_REFERENCE_SYSTEM) !=  SNORT_SNPRINTF_SUCCESS))
-    {
-        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
-                   __FUNCTION__);
-    }
-    
-    if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
-    {
-        /* A This shouldn't happen since we are in failed transaction state */
-        /* XXX */
-        return 1;
-    }
-    
-    if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
-    {
-        /* XXX */
-        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
-                   __FUNCTION__,
-                   data->SQL_SELECT);
-    }
-    
-    switch(data->dbtype_id)
-    {
-	
-#ifdef ENABLE_MYSQL
-	
-    case DB_MYSQL:
-	
-        result = mysql_query(data->m_sock,data->SQL_SELECT);
-	
-        switch(result)
-        {
-        case 0:
-            if( (data->m_result = mysql_store_result(data->m_sock)) == NULL)
-            {
-                /* XXX */
-                LogMessage("[%s()], Failed call to mysql_store_result \n",
-                           __FUNCTION__);
-                return 1;
-            }
-            else
-            {
-		
-                MYSQL_ROW row = NULL;
-                my_ulonglong num_row = 0;
-                unsigned int i = 0;
-		
-                if( (num_row = mysql_num_rows(data->m_result)) > 0)
-                {
-                    if( (*iArrayPtr = SnortAlloc( (sizeof(dbSystemObj) * num_row))) == NULL)
-                    {
-                        mysql_free_result(data->m_result);
-                        data->m_result = NULL;
-                        FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
-                                   __FUNCTION__);
-                    }
-                }
-                else
-                {
-                    /* XXX */
-                    free(*iArrayPtr);
-                    *iArrayPtr = NULL;
-                    mysql_free_result(data->m_result);
-                    data->m_result = NULL;
-                    LogMessage("[%s()]: No System found in database ... \n",
-                               __FUNCTION__);
-                    return 0;
-                }
-
-                *array_length = num_row;
-
-                queryColCount = mysql_num_fields(data->m_result);
-
-                if(queryColCount != NUM_ROW_REFERENCE_SYSTEM)
-                {
-                    /* XXX */
-                    free(*iArrayPtr);
-                    *iArrayPtr = NULL;
-                    mysql_free_result(data->m_result);
-                    data->m_result = NULL;
-                    LogMessage("[%s()] To many column returned by query [%u]...\n",
-                               __FUNCTION__,
-                               queryColCount);
-                    return 1;
-                }
-
-                while ((curr_row < num_row) &&
-                       (row = mysql_fetch_row(data->m_result)))
-                {
-
-                    dbSystemObj *cPtr = &(*iArrayPtr)[curr_row];
-
-                    for(i = 0; i < queryColCount; i++)
-                    {
-                        unsigned long *lengths={0};
-
-                        if( (lengths = mysql_fetch_lengths(data->m_result)) == NULL)
-                        {
-                            free(*iArrayPtr);
-                            *iArrayPtr = NULL;
-                            mysql_free_result(data->m_result);
-                            data->m_result = NULL;
-                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
-                                       __FUNCTION__);
-                        }
-			
-			if( (row[i] != NULL) )
-                        {
-                            switch (i)
-                            {
-				
-                            case 0:
-                                cPtr->db_ref_system_id = strtoul(row[i],NULL,10);
-                                break;
-				
-                            case 1:
-                                strncpy(cPtr->ref_system_name,row[i],SYSTEM_NAME_LEN);
-				cPtr->ref_system_name[SYSTEM_NAME_LEN-1] = '\0'; //toasty.
-
-				//Safety escape value.
-                                if( (snort_escape_string_STATIC(cPtr->ref_system_name,SYSTEM_NAME_LEN,data)))
-                                {
-                                    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-                                               "[%s], Exiting. \n",
-                                               __FUNCTION__,
-                                               cPtr->ref_system_name);
-                                }
-
-
-                                break;
-				
-                            default:
-                                /* XXX */
-                                /* Should bail here... */
-                                break;
-                            }
-                        }
-                    }
-                    curr_row++;
-                }
-
-                mysql_free_result(data->m_result);
-                data->m_result = NULL;
-                return 0;
-            }
-            break;
-
-
-        case CR_COMMANDS_OUT_OF_SYNC:
-        case CR_SERVER_GONE_ERROR:
-        case CR_UNKNOWN_ERROR:
-        default:
-
-            if(checkTransactionState(data->dbRH))
-            {
-                LogMessage("[%s()]: Failed executing with error [%s], in transaction will Abort. \n Failed QUERY: [%s] \n",
-                           __FUNCTION__,
-                           mysql_error(data->m_sock),
-                           data->SQL_SELECT);
-                return 1;
-            }
-
-            LogMessage("[%s()]: Failed exeuting query [%s] , will retry \n",
-                       __FUNCTION__,
-                       data->SQL_SELECT);
-            break;
-
-        }
-
-        /* XXX */
-        return 1;
-
-        break;
-
-#endif /* ENABLE_MYSQL */
-
-#ifdef ENABLE_POSTGRESQL
-    case DB_POSTGRESQL:
-
-        data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
-
-        pgStatus = PQresultStatus(data->p_result);
-        switch(pgStatus)
-	{
-
-	case PGRES_TUPLES_OK:
-
-	    if( (num_row = PQntuples(data->p_result)))
-	    {
-
-		*array_length = num_row;
-
-		if( (queryColCount = PQnfields(data->p_result)) !=  NUM_ROW_REFERENCE_SYSTEM)
-		{
-		    LogMessage("[%s()] To many column returned by query [%u]...\n",
-			       __FUNCTION__,
-			       queryColCount);
-		    PQclear(data->p_result);
-		    data->p_result = NULL;
-		    return 1;
-		}
-
-
-		if( (*iArrayPtr = SnortAlloc( (sizeof(dbSystemObj) * num_row))) == NULL)
-		{
-		    if(data->p_result)
-		    {
-			PQclear(data->p_result);
-			data->p_result = NULL;
-		    }
-
-		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
-			       __FUNCTION__);
-		}
-
-		for(curr_row = 0 ; curr_row < num_row ; curr_row++)
-		{
-                    dbSystemObj *cPtr = &(*iArrayPtr)[curr_row];
-
-		    for(curr_col = 0 ; curr_col < queryColCount ; curr_col ++)
-		    {
-			pg_val = NULL;
-			if( (pg_val = PQgetvalue(data->p_result,curr_row,curr_col)) == NULL)
-			{
-			    /* XXX */
-			    /* Something went wrong */
-			    PQclear(data->p_result);
-			    data->p_result = NULL;
-			    return 1;
-			}
-			
-			switch(curr_col)
-			{
-			    
-			case 0:
-			    cPtr->db_ref_system_id = strtoul(pg_val,NULL,10);
-			    break;
-
-			case 1:
-			    strncpy(cPtr->ref_system_name,pg_val,SYSTEM_NAME_LEN);
-			    cPtr->ref_system_name[SYSTEM_NAME_LEN-1] = '\0'; //toasty.
-
-			    //Safety escape value.
-			    if( (snort_escape_string_STATIC(cPtr->ref_system_name,SYSTEM_NAME_LEN,data)))
-			    {
-				FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-					   "[%s], Exiting. \n",
-					   __FUNCTION__,
-					   &cPtr->ref_system_name);
-			    }
-
-
-			    break;
-
-			default:
-			    /* We should bail here*/
-			    break;
-			}
-		    }
-		}
-	    }
-	    else
-	    {
-		*array_length = 0;
-	    }
-
-
-	    if(data->p_result)
-	    {
-		PQclear(data->p_result);
-		data->p_result = NULL;
-	    }
-
-	    return 0;
-	    break;
-
-	default:
-	    if(PQerrorMessage(data->p_connection)[0] != '\0')
-	    {
-		ErrorMessage("ERROR database: postgresql_error: %s\n",
-			     PQerrorMessage(data->p_connection));
-		return 1;
-	    }
-	    break;
-	}
-
-	return 1;
-	break;
-
-#endif /* ENABLE_POSTGRESQL */
-
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-
-	if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
-	{
-
-	    if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)data->SQL_SELECT, SQL_NTS) == SQL_SUCCESS)
-	    {
-		if( SQLNumResultCols(data->u_statement,&col_count) == SQL_SUCCESS)
-		{
-		    if(col_count == NUM_ROW_REFERENCE_SYSTEM)
-		    {
-			if(SQLRowCount(data->u_statement, &data->u_rows) != SQL_SUCCESS)
-			{
-			    ODBCPrintError(data,SQL_HANDLE_STMT);
-			    FatalError("[%s()]: SQLRowCount() call failed \n",
-				       __FUNCTION__);
-			}
-			
-			if(data->u_rows)
-			{
-			    if( (*iArrayPtr = SnortAlloc( (sizeof(dbSystemObj) * data->u_rows))) == NULL)
-			    {
-				goto ODBCError;
-			    }
-			    
-			    *array_length = data->u_rows;
-			    
-			}
-			else
-			{
-			    /* We have no records */
-			    *array_length = 0;
-			    return 0;
-			}
-			
-		    }
-		    else
-		    {
-			FatalError("[%s()]: The number of column returned does not match [%u] \n",
-				   __FUNCTION__,
-				   NUM_ROW_REFERENCE_SYSTEM);
-		    }
-		}
-		else
-		{
-			LogMessage("[%s()]: SQLNumResultCols() call failed \n",
-				   __FUNCTION__);
-			ODBCPrintError(data,SQL_HANDLE_STMT);
-			goto ODBCError;
-			}
-		
-	    }
-	    else
-	    {
-		LogMessage("[%s()]: SQLExecDirect() call failed \n",
-			   __FUNCTION__);
-		ODBCPrintError(data,SQL_HANDLE_STMT);
-		goto ODBCError;
-		
-	    }
-	}
-	else
-	{
-	    LogMessage("[%s()]: SQLAllocStmt() call failed \n",
-		       __FUNCTION__);
-	    ODBCPrintError(data,SQL_HANDLE_STMT);
-	    goto ODBCError;
-	}
-	
-	SQLINTEGER col1_len = 0;
-	SQLINTEGER col2_len = 0;
-	    
-	    /* Bind template object */
-	    if( SQLBindCol(data->u_statement,1,SQL_C_LONG,&tSystemObj.db_ref_system_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
-	    {
-		LogMessage("[%s()]: SQLBindCol() call failed \n",
-			   __FUNCTION__);
-		ODBCPrintError(data,SQL_HANDLE_STMT);
-		goto ODBCError;
-	    }
-	    
-	    if( SQLBindCol(data->u_statement,2,SQL_C_CHAR,&tSystemObj.ref_system_name,(sizeof(char) * SYSTEM_NAME_LEN) ,&col2_len) != SQL_SUCCESS)
-	    {
-		LogMessage("[%s()]: SQLBindCol() call failed \n",
-			   __FUNCTION__);
-		ODBCPrintError(data,SQL_HANDLE_STMT);
-		goto ODBCError;
-	    }
-	    
-	    for(curr_row = 0; curr_row < data->u_rows;curr_row++)
-	    {
-		dbSystemObj *cPtr = &(*iArrayPtr)[curr_row];
-		
-                /* fetch */
-		if( SQLFetch(data->u_statement) != SQL_SUCCESS)
-		{
-		    LogMessage("[%s()]: SQLFetch error on record [%u] \n",
-			       __FUNCTION__,
-			       curr_row+1);
-		    ODBCPrintError(data,SQL_HANDLE_STMT);
-		    goto ODBCError;
-		}
-		else
-		{
-		    if( (col1_len == SQL_NO_TOTAL || col1_len == SQL_NULL_DATA) ||
-			(col2_len == SQL_NO_TOTAL || col2_len == SQL_NULL_DATA))
-		    {
-			FatalError("[%s()] Seem's like we have some null data ...\n",
-				   __FUNCTION__);
-		    }
-		    
-		    
-		    /* Copy object */
-		    if( (memcpy(cPtr,&tSystemObj,sizeof(dbSystemObj))) != cPtr)
-		    {
-			FatalError("[%s()] : memcpy error ..\n",
-				   __FUNCTION__);
-		    }
-		    
-		    /* Clear temp obj */
-		    memset(&tSystemObj,'\0',sizeof(dbSystemObj));
-		}
-	    }
-
-
-	    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-	    return 0;
-
-    ODBCError:
-	    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-	    return 1;
-
-        break;
-#endif /* ENABLE_ODBC */
-
-#ifdef ENABLE_ORACLE
-    case DB_ORACLE:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-
-        break;
-#endif /* ENABLE_ORACLE */
-
-#ifdef ENABLE_MSSQL
-    case DB_MSSQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-#endif /* ENABLE_MSSQL */
-
-    default:
-
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-
-    }
-
-    return 0;
-}
-
-
-/** 
- *  Merge internal System cache with database data, detect difference, tag known node for database update
- * 
- * @param iDBList 
- * @param array_length 
- * @param cacheHead 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t SystemCacheUpdateDBid(dbSystemObj *iDBList,u_int32_t array_length,cacheSystemObj **cacheHead)
-{
-    dbSystemObj *cObj = NULL;
-    cacheSystemObj *TobjNode = NULL;
-    int x = 0;
-    
-    if( (iDBList == NULL) ||
-        (array_length == 0) ||
-        (cacheHead == NULL))
-    {
-        /* XXX */
-        return 1;
-    }
-    
-    for(x = 0 ; x < array_length ; x++)
-    {
-        cObj = &iDBList[x];
-	
-        if( (dbSystemLookup(cObj,*cacheHead)) == 0 )
-        {
-            /* Element not found, add the db entry to the list. */
-	    
-            if( (TobjNode = SnortAlloc(sizeof(cacheSystemObj))) == NULL)
-            {
-                /* XXX */
-		LogMessage("[%s()]: Error Failed to allocate..\n",__FUNCTION__);
-                return 1;
-            }
-	    
-            memcpy(&TobjNode->obj,cObj,sizeof(dbSystemObj));
-            TobjNode->flag ^= CACHE_DATABASE_ONLY;
-	    
-            if(*cacheHead == NULL)
-            {
-                *cacheHead = TobjNode;
-            }
-            else
-            {
-                TobjNode->next = *cacheHead;
-                *cacheHead = TobjNode;
-            }
-        }
-    }
-
-    return 0;
-}
-
-
-/** 
- *  Merge internal Reference cache with database data, detect difference, tag known node for database update
- * 
- * @param iDBList 
- * @param array_length 
- * @param cacheHead 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t ReferenceCacheUpdateDBid(dbReferenceObj *iDBList,u_int32_t array_length,cacheSystemObj **cacheHead)
-{
-    cacheSystemObj *systemHead = NULL;
-    cacheReferenceObj *TobjNode = NULL;
-    dbReferenceObj *cObj = NULL;    
-    
-    int x = 0;
-    
-    if( (iDBList == NULL) ||
-        (array_length == 0) ||
-	(cacheHead == NULL))
-    {
-        /* XXX */
-        return 1;
-    }
-    
-    
-/* Set CACHE_BOTH if matches */
-    
-    systemHead = *cacheHead;
-    while(systemHead != NULL)
-    {    
-	for(x = 0 ; x < array_length ; x++)
-	{
-	    cObj = &iDBList[x];
-	    
-	    if(cObj->system_id == systemHead->obj.db_ref_system_id)
-	    {
-		if( (dbReferenceLookup(cObj,systemHead->obj.refList)) == 0)
-		{
-		    if( (TobjNode = SnortAlloc(sizeof(cacheReferenceObj))) == NULL)
-		    {
-			/* XXX */
-			return 1;
-		    }
-		    
-		    memcpy(&TobjNode->obj,cObj,sizeof(dbReferenceObj));
-		    
-		    TobjNode->flag = CACHE_DATABASE_ONLY;
-		    
-		    TobjNode->obj.parent = systemHead;
-		    TobjNode->next = systemHead->obj.refList;
-		    
-		    systemHead->obj.refList = TobjNode;
-		}
-	    }
-	}
-	
-	systemHead = systemHead->next;
-    }
-    return 0;
-}
-
-/** 
- *  Populate the reference table with record that are not present in the database.
- * 
- * @param data 
- * @param cacheHead 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cacheHead)
-{
-    u_int32_t db_ref_id;
-
-    
-    if( (data == NULL) ||
-	(cacheHead == NULL))
-    {
-        /* XXX */
-        return 1;
-    }
-    
-    if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
-    {
-        /* A This shouldn't happen since we are in failed transaction state */
-        /* XXX */
-        return 1;
-    }
-    
-    if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
-    {
-        /* XXX */
-        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
-                   __FUNCTION__,
-                   data->SQL_SELECT);
-    }
-    
-    BeginTransaction(data);
-    
-    while(cacheHead != NULL)
-    {
-	if(cacheHead->flag & CACHE_INTERNAL_ONLY)
-        {
-
-#if DEBUG
-            inserted_reference_object_count++;
-#endif
-
-	    /* Removed the escaping because we live escaped in the cache */
-	    
-	    DatabaseCleanInsert(data);
-	    
-	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-			       SQL_INSERT_SPECIFIC_REF,
-			       cacheHead->obj.parent->obj.db_ref_system_id,
-			       cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
-	    }
-	    
-	    DatabaseCleanSelect(data);
-
-	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-			       SQL_SELECT_SPECIFIC_REF,
-			       cacheHead->obj.parent->obj.db_ref_system_id,
-			       cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
-	    }
-
-            if(Insert(data->SQL_INSERT,data,1))
-            {
-                /* XXX */
-                goto TransactionFail;
-            }
-
-            if(Select(data->SQL_SELECT,data,&db_ref_id))
-            {
-                /* XXX */
-                goto TransactionFail;
-            }
-	    
-	    
-            cacheHead->obj.ref_id = db_ref_id;
-	    cacheHead->obj.system_id = cacheHead->obj.parent->obj.db_ref_system_id;
-	    cacheHead->flag ^= (CACHE_INTERNAL_ONLY | CACHE_BOTH); /* Remove it */
-
-
-
-        }
-        
-        cacheHead = cacheHead->next;
-    }
-    
-    CommitTransaction(data);
-
-    return 0;
-
-TransactionFail:
-    RollbackTransaction(data);
-    return 1;
-}
-
-
-/** 
- *  Populate the system table with record that are not present in the database.
- * 
- * @param data 
- * @param cacheHead 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
-{
-    u_int32_t db_system_id = 0;
-
-    if (data == NULL)
-    {
-        /* XXX */
-        return 1;
-    }
-
-    if(cacheHead == NULL)
-    {
-	/* Nothing to do */
-	return 0;
-    }
-    
-    if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
-    {
-        /* A This shouldn't happen since we are in failed transaction state */
-        /* XXX */
-        return 1;
-    }
-    
-    if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
-    {
-        /* XXX */
-        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
-                   __FUNCTION__,
-                   data->SQL_SELECT);
-    }
-    
-    BeginTransaction(data);
-    
-    while(cacheHead != NULL)
-    {
-        if(cacheHead->flag & CACHE_INTERNAL_ONLY)
-        {
-#if DEBUG
-            inserted_system_object_count++;
-#endif
-
-
-	    if( (snort_escape_string_STATIC(cacheHead->obj.ref_system_name,SYSTEM_NAME_LEN,data)))
-            {
-                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-                           "[%s], Exiting. \n",
-                           __FUNCTION__,
-                           cacheHead->obj.ref_system_name);
-            }
-	    
-            DatabaseCleanInsert(data);
-	    
-	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-			       SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM,
-				   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
-	    }
-
-	    DatabaseCleanSelect(data);
-	
-	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-			       SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM,
-			       cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
-	    }
-
-            if(Insert(data->SQL_INSERT,data,1))
-            {
-                /* XXX */
-                goto TransactionFail;
-            }
-	    
-            if(Select(data->SQL_SELECT,data,&db_system_id))
-            {
-                /* XXX */
-                goto TransactionFail;
-            }
-	    
-	    cacheHead->obj.db_ref_system_id = db_system_id;
-	    cacheHead->flag ^=  (CACHE_INTERNAL_ONLY | CACHE_BOTH); 
-	    
-	    /* Give child system id */
-	    
-	    cacheReferenceObj *tNode = cacheHead->obj.refList;
-	    while(tNode != NULL)
-	    {
-		tNode->obj.parent = (cacheSystemObj *)&cacheHead->obj;
-		tNode->obj.system_id = cacheHead->obj.db_ref_system_id;
-		tNode = tNode->next;
-	    }
-
-
-        }
-
-
-        cacheHead = cacheHead->next;
-    }
-
-    CommitTransaction(data);        
-
-    return 0;
-
-TransactionFail:
-    RollbackTransaction(data);
-    return 1;
-}
-
-
-/** 
- * Wrapper function for system cache synchronization
- * 
- * @param data 
- * @param cacheHead 
- * 
- * @return 
- * 0 OK
- * 1 ERROR
- */
-u_int32_t SystemCacheSynchronize(DatabaseData *data,cacheSystemObj **cacheHead)
-{
-    
-    cacheSystemObj *SystemCacheElemPtr = NULL;
-    dbSystemObj *dbSysArray = NULL;
-    dbReferenceObj *dbRefArray = NULL;	 
-    
-    u_int32_t array_length = 0;
-
-    if( (data == NULL)  ||
-        (*cacheHead == NULL))
-    {
-        /* XXX */
-        return 1;
-    }
-
-
-    if( (SystemPullDataStore(data,&dbSysArray,&array_length)))
-    {
-        /* XXX */
-        return 1;
-    }
-    
-#if DEBUG
-    db_system_object_count=array_length;
-#endif
-
-
-    //If system is not populated correctly, we probably do not have ref's
-    //and if so using the schema logic they probably are wrong, thus
-    // we will insert them by our self afterward.
-    if( array_length > 0 )
-    {
-	if( (SystemCacheUpdateDBid(dbSysArray,array_length,cacheHead)) )
-        {
-            /* XXX */
-	    LogMessage("[%s()], Call to SystemCacheUpdateDBid() failed. \n",
-                       __FUNCTION__);
-	    goto func_fail;
-        }
-    }
-    
-    /* Reset for re-use */
-    array_length = 0;
-    
-    if( (ReferencePullDataStore(data,&dbRefArray,&array_length)))
-    {
-	/* XXX */
-	LogMessage("[%s()], Call to ReferencePullDataStore() failed. \n",
-		   __FUNCTION__);
-	goto func_fail;
-    }	
-    
-#if DEBUG
-    db_reference_object_count=array_length;
-#endif
-
-
-    if(array_length > 0)
-    {
-	if( (ReferenceCacheUpdateDBid(dbRefArray,array_length,cacheHead)))
-	{
-	    /* XXX */
-	    LogMessage("[%s()], Call to ReferenceCacheUpdateDBid() failed \n",
-		       __FUNCTION__);
-	    goto func_fail;
-	}
-    }
-    
-    /* Populate. */
-    if(SystemPopulateDatabase(data,*cacheHead))
-    {
-        LogMessage("[%s()], Call to SystemPopulateDatabase() failed \n",
-                   __FUNCTION__);
-	goto func_fail;
-    }
-    
-    /* Update Reference cache */
-    SystemCacheElemPtr = *cacheHead;
-    
-    while(SystemCacheElemPtr != NULL)
-    {
-	if(SystemCacheElemPtr->obj.refList != NULL)
-	{
-	    if(ReferencePopulateDatabase(data,SystemCacheElemPtr->obj.refList))
-	    {
-		LogMessage("[%s()], Call to ReferencePopulateDatabase() failed \n",
-			   __FUNCTION__);
-		goto func_fail;
-	    }
-	}
-	SystemCacheElemPtr = SystemCacheElemPtr->next;
-    }
-    
-    if(dbRefArray != NULL)
-    {
-        free(dbRefArray);
-        dbRefArray = NULL;
-        array_length = 0;
-    }
-    
-    if(dbSysArray != NULL)
-    {
-        free(dbSysArray);
-        dbSysArray = NULL;
-        array_length = 0;
-    }
-    
-    return 0;
-    
-    
-func_fail:
-    if(dbRefArray != NULL)
-    {
-        free(dbRefArray);
-        dbRefArray = NULL;
-        array_length = 0;
-    }
-
-    if( dbSysArray != NULL)
-    {
-	free(dbSysArray);
-	dbSysArray = NULL;
-	array_length = 0;
-    }
-    
-    return 1;
-    
-}
-/***********************************************************************************************SYSTEM API*/
-/*
-** Those update system and reference 
-*/
-/***********************************************************************************************SYSTEM API*/
-
-
-
 /***********************************************************************************************SIGREF API*/
+
 
 /***********************************************************************************************SIGREF API*/
 
@@ -3258,32 +1851,21 @@ func_fail:
  * 0 OK
  * 1 ERROR
  */
-u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data)
-{
-    if((bc == NULL) ||
-       (data == NULL))
-    {
-	/* XXX */
-	FatalError("database [%s()], received a NULL argument : Barnyard2Config [0x%x] or DatabaseData [0x%x]  \n",
-		   __FUNCTION__,
-		   bc,
-		   data);
+u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data) {
+    if (bc == NULL|| data == NULL) {
+		FatalError("database [%s()], received a NULL argument : Barnyard2Config [0x%x] or DatabaseData [0x%x]  \n",
+			__FUNCTION__,
+			bc,
+			data);
     }
     
-    if( (ConvertClassificationCache(&bc->classifications,&data->mc,data)))
-    {
-	/* XXX */
-	return 1;
+    if ((ConvertClassificationCache(&bc->classifications,&data->mc,data))) {
+		return 1;
     }
 
-/*GREG    if( (ConvertSignatureCache(BcGetSigNodeHead(),&data->mc,data)))
-    {
-	return 1;
-    }
-*/
-    
     return 0;
 }
+
 
 
 /** 
@@ -3421,32 +2003,6 @@ u_int32_t CacheSynchronize(DatabaseData *data)
 	return 1;
     }
     
-    //System Synchronize
-    if(data->mc.cacheSystemHead != NULL)
-    {
-	if( (SystemCacheSynchronize(data,&data->mc.cacheSystemHead)))
-	{
-	    /* XXX */
-	    LogMessage("[%s()]:, SystemCacheSyncronize() call failed. \n",
-		       __FUNCTION__);
-	    return 1;
-	}
-//GREG	@TODO
-/*	if(!data->dbRH[data->dbtype_id].disablesigref)
-	{
-	    //SigRef Synchronize 
-	    if( (SigRefSynchronize(data,&data->mc.cacheSigReferenceHead,data->mc.cacheSignatureHead)))
-	    {
-		LogMessage("[%s()]: SigRefSynchronize() call failed \n",
-			   __FUNCTION__);
-		return 1;
-	    }
-	}*/
-    }
-    else
-    {
-	LogMessage("\n[%s()],INFO: No system was found in cache (from signature map file), will not process or synchronize informations found in the database \n\n",__FUNCTION__);
-    }
 #if DEBUG
 
     DEBUG_WRAP(DebugMessage(DB_DEBUG,"================================================"
@@ -3490,10 +2046,9 @@ u_int32_t CacheSynchronize(DatabaseData *data)
 #endif
 
     
-    /* Since we do not need reference and sig_reference clear those cache (free memory) and clean signature reference list and count */
-    MasterCacheFlush(data,CACHE_FLUSH_SYSTEM_REF|CACHE_FLUSH_SIGREF|CACHE_FLUSH_SIGREF);
-    /* Since we do not need reference and sig_reference clear those cache (free memory) and clean signature reference list and count */
-    
+    // Since we do not need reference and sig_reference clear those cache (free memory) and clean signature reference list and count 
+    //MasterCacheFlush(data,CACHE_FLUSH_SYSTEM_REF|CACHE_FLUSH_SIGREF|CACHE_FLUSH_SIGREF);
+    // Since we do not need reference and sig_reference clear those cache (free memory) and clean signature reference list and count
     
     return 0;
 }

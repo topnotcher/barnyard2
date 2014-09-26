@@ -24,7 +24,7 @@
 CREATE TABLE `schema` ( vseq        INT      UNSIGNED NOT NULL,
                       ctime       DATETIME NOT NULL,
                       PRIMARY KEY (vseq));
-INSERT INTO `schema`  (vseq, ctime) VALUES ('107', now());       
+INSERT INTO `schema`  (vseq, ctime) VALUES ('108', now());       
 
 CREATE TABLE event  ( sid 	  INT 	   UNSIGNED NOT NULL,
                       cid 	  INT 	   UNSIGNED NOT NULL,
@@ -57,7 +57,9 @@ CREATE TABLE reference (  ref_id        INT         UNSIGNED NOT NULL AUTO_INCRE
 
 CREATE TABLE reference_system ( ref_system_id   INT         UNSIGNED NOT NULL AUTO_INCREMENT,
                                 ref_system_name VARCHAR(20),
-                                PRIMARY KEY (ref_system_id));
+                                ref_system_url varchar(255),
+                                PRIMARY KEY (ref_system_id)
+                                key (`ref_system_name`));
 
 CREATE TABLE sig_class ( sig_class_id        INT    UNSIGNED NOT NULL AUTO_INCREMENT,
                          sig_class_name      VARCHAR(60) NOT NULL,

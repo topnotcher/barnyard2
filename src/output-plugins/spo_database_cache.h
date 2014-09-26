@@ -116,8 +116,8 @@
 //#endif
 
 
-#define SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM "INSERT INTO reference_system (ref_system_name) VALUES ('%s');"
-#define SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM "SELECT ref_system_id FROM reference_system WHERE ref_system_name = '%s';"
+#define SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM "INSERT INTO reference_system (ref_system_name,ref_system_url) VALUES ('%s','%s');"
+#define SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM "SELECT ref_system_id FROM reference_system WHERE ref_system_name = '%s' AND ref_system_url='%s';"
 #define SQL_INSERT_SPECIFIC_REF  "INSERT INTO reference (ref_system_id,ref_tag) VALUES ('%u','%s');"
 #define SQL_SELECT_SPECIFIC_REF  "SELECT ref_id FROM reference WHERE ref_system_id = '%u' AND ref_tag = '%s';"
 #define SQL_INSERT_CLASSIFICATION "INSERT INTO sig_class (sig_class_name) VALUES ('%s');"

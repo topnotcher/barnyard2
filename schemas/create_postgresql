@@ -24,7 +24,7 @@
 CREATE TABLE schema ( vseq        INT4     NOT NULL,
                       ctime       TIMESTAMP with time zone NOT NULL,
                       PRIMARY KEY (vseq));
-INSERT INTO schema  (vseq, ctime) VALUES ('107', now());
+INSERT INTO schema  (vseq, ctime) VALUES ('108', now());
 
 CREATE TABLE signature ( sig_id       SERIAL NOT NULL,
                          sig_name     TEXT NOT NULL,
@@ -49,7 +49,9 @@ CREATE TABLE reference (  ref_id        SERIAL,
 
 CREATE TABLE reference_system ( ref_system_id   SERIAL,
                                 ref_system_name TEXT,
+                                ref_system_url varchar(255),
                                 PRIMARY KEY (ref_system_id));
+CREATE INDEX ref_system_name_idx on reference_system(ref_system_name);
 
 CREATE TABLE sig_class ( sig_class_id        SERIAL,
                          sig_class_name      TEXT NOT NULL,

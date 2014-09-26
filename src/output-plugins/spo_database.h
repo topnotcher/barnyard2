@@ -183,10 +183,9 @@ typedef struct _cacheReferenceObj
  ------------------------------------------ */
 typedef struct _dbSystemObj
 {
-    u_int32_t ref_system_id;
     u_int32_t db_ref_system_id;
-    char ref_system_name[SYSTEM_NAME_LEN];
-    char ref_system_url[SYSTEM_URL_LEN];
+    char name[SYSTEM_NAME_LEN];
+    char url[SYSTEM_URL_LEN];
     cacheReferenceObj *refList;
 
 } dbSystemObj;
