@@ -306,6 +306,15 @@ typedef struct _VarNode
 
 } VarNode;
 
+struct _SidMsgMapFileNode;
+
+typedef struct _SidMsgMapFileNode {
+	char * file;
+	/* SOURCE_GEN_MSG or SOURCE_SID_MSG */
+	u_int8_t type; 
+	short version;
+	struct _SidMsgMapFileNode * next;
+} SidMsgMapFileNode;
 
 /* struct to contain the program variables and command line args */
 typedef struct _Barnyard2Config
@@ -406,9 +415,11 @@ typedef struct _Barnyard2Config
     char *interface;	        /* -i or config interface */
     
     char *class_file;          /* -C or config class_map */
-    char *sid_msg_file;        /* -S or config sid_map */
-    short sidmap_version;      /* Set by ReadSidFile () */
-    char *gen_msg_file;        /* -G or config gen_map */
+
+    /* -S or config sid_map */
+    /* Set by ReadSidFile () */
+    /* -G or config gen_map */
+	SidMsgMapFileNode * sid_msg_files;
 
     char *reference_file;      /* -R or config reference_map */
     char *log_dir;             /* -l or config log_dir */
@@ -752,11 +763,6 @@ static INLINE long int BcMplsPayloadType(void)
 
 #endif
 
-static INLINE short BcSidMapVersion(void)
-{
-    return barnyard2_conf->sidmap_version;
-}
-
 static INLINE SidGidMsgMap * BcGetSigNodeHead(void)
 {
 	//@TODO could probably allocate this on startup?
@@ -777,12 +783,12 @@ static INLINE char * BcGetSourceFile(u_int8_t source_file)
     {
 
     case SOURCE_SID_MSG:
-       	return barnyard2_conf->sid_msg_file;
+       	return /*barnyard2_conf->sid_msg_file@TODO*/ "sid-msg.map";
 	break;
 
 
     case SOURCE_GEN_MSG:
-	return barnyard2_conf->gen_msg_file;
+	return /*barnyard2_conf->gen_msg_file@TODO*/ "gen-msg.map";
 	break;
 	
     default:

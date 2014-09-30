@@ -1301,15 +1301,6 @@ int dbProcessEventSignature(DatabaseData *data,void *event, u_int32_t event_type
     lookup.rev = ntohl(((Unified2EventCommon *)event)->signature_revision);
     lookup.priority_id = ntohl(((Unified2EventCommon *)event)->priority_id);
     lookup.class_id = ntohl(((Unified2EventCommon *)event)->classification_id);
-    
-    /* 
-       This is now only needed for backward compatible with old sid-msg.map file.
-       new version has gid || sid || revision || msg || etc.. 
-    */
-	if( BcSidMapVersion() == SIDMAPV1 && lookup.gid == 3) {
-		lookup.gid = 1;
-	}
-    
 
     /* NOTE: elz 
        For sanity purpose the sig_class table SHOULD have internal classification id to prevent possible 

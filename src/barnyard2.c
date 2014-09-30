@@ -805,13 +805,13 @@ static void ParseCmdLine(int argc, char **argv)
 #endif
                 break;
 
-     	    case 'S':  /* set a rules file variable */
-		bc->sid_msg_file = strndup(optarg,PATH_MAX);
-		break;
-		
-   	    case 'G':  /* snort preprocessor identifier */
-		bc->gen_msg_file = strndup(optarg,PATH_MAX);
-		break;
+			case 'S':
+				ConfigSidFile(bc, optarg);
+				break;
+
+			case 'G':
+				ConfigGenFile(bc, optarg);
+			break;
 
             case 't':  /* chroot to the user specified directory */
                 ConfigChrootDir(bc, optarg);
@@ -1455,72 +1455,71 @@ void Barnyard2ConfFree(Barnyard2Config *bc)
 {
     if (bc == NULL)
         return;
-       
+
     if (bc->log_dir != NULL)
     {
         free(bc->log_dir);
 	bc->log_dir = NULL;
     }
-    
+
     if (bc->orig_log_dir != NULL)
     {
         free(bc->orig_log_dir);
 	bc->orig_log_dir = NULL;
     }
-    
+
     if (bc->interface != NULL)
     {
         free(bc->interface);
 	bc->interface = NULL;
     }
-    
+
     if (bc->chroot_dir != NULL)
     {
         free(bc->chroot_dir);
 	bc->chroot_dir = NULL;
     }
-    
+
     if (bc->archive_dir != NULL)
     {
         free(bc->archive_dir);
 	bc->archive_dir = NULL;
     }
-    
+
     if(bc->config_file != NULL)
     {
 	free(bc->config_file);
 	bc->config_file = NULL;
     }
-    
+
     if(bc->config_dir != NULL)
     {
 	free(bc->config_dir);
 	bc->config_dir = NULL;
     }
-    
+
     if(bc->hostname != NULL)
     {
 	free(bc->hostname);
 	bc->hostname = NULL;
     }
-    
+
     if(bc->class_file != NULL)
     {
 	free(bc->class_file);
 	bc->class_file = NULL;
     }
-    
-    if( bc->sid_msg_file != NULL)
-    {
-	free(bc->sid_msg_file);
-	bc->sid_msg_file = NULL;
-    }
 
-    if( bc->gen_msg_file != NULL)
-    {
-	free(bc->gen_msg_file);
-	bc->gen_msg_file = NULL;
-    }
+	SidMsgMapFileNode * next = NULL;
+	while (bc->sid_msg_files != NULL) {
+		next = bc->sid_msg_files->next;
+
+		if (bc->sid_msg_files->file != NULL)
+			free(bc->sid_msg_files->file);
+
+		free(bc->sid_msg_files);
+		bc->sid_msg_files = next;
+	}
 
     if( bc->reference_file != NULL)
     {
@@ -1703,52 +1702,23 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
 	config_file->ssHead = cmd_line->ssHead;
 	cmd_line->ssHead = NULL;
     }
-    
-    if( (cmd_line->sid_msg_file) &&
-	(config_file->sid_msg_file))
-    {
-	FatalError("The sid map file was included two times command line (-S) [%s] and in the configuration file (config sid_map) [%s].\n"
-		   "It only need to be defined once.\n",
-		   cmd_line->sid_msg_file,
-		   config_file->sid_msg_file);
-    }    
 
-    if( (cmd_line->gen_msg_file) &&
-	(config_file->gen_msg_file))
-    {
-	FatalError("The gen map file was included two times command line (-G) [%s] and in the configuration file (config gen_map) [%s].\n"
-		   "It only need to be defined once.\n",
-		   cmd_line->gen_msg_file,
-		   config_file->gen_msg_file);
-    }
+	if (config_file->sid_msg_files != NULL) {
+		SidMsgMapFileNode * cur	= config_file->sid_msg_files;
+		while (cur->next != NULL)
+			cur = cur->next;
 
-    if( (cmd_line->sid_msg_file != NULL) &&
-	(config_file->sid_msg_file == NULL))
-    {
-	config_file->sid_msg_file = cmd_line->sid_msg_file;
-	cmd_line->sid_msg_file = NULL;
-    }
-    
-    if( (cmd_line->gen_msg_file != NULL) &&
-        (config_file->gen_msg_file == NULL))
-    {
-        config_file->gen_msg_file = cmd_line->gen_msg_file;
-        cmd_line->gen_msg_file = NULL;
-    }
-
+		cur->next = cmd_line->sid_msg_files;
+	} else if (cmd_line->sid_msg_files != NULL) {
+		config_file->sid_msg_files = cmd_line->sid_msg_files;
+	}
 
     if( cmd_line->event_cache_size > config_file->event_cache_size)
     {
 	config_file->event_cache_size = cmd_line->event_cache_size;
     }
-    
-    /* In case */
-    if(cmd_line->sidmap_version > config_file->sidmap_version)
-    {
-	config_file->sidmap_version = cmd_line->sidmap_version;
-    }
 
-    
+
     /* Used because of a potential chroot */
     config_file->orig_log_dir = SnortStrdup(config_file->log_dir);
 
@@ -1966,45 +1936,30 @@ static void Barnyard2Init(int argc, char **argv)
          * command line overriding config file.
          * Set the global barnyard2_conf that will be used during run time */
         barnyard2_conf = MergeBarnyard2Confs(barnyard2_cmd_line_conf, bc);
-	
+
 	DisplaySigSuppress(BCGetSigSuppressHead());
 
-	if(ReadSidFile(barnyard2_conf))
-	{
-	    FatalError("[%s()], failed while processing [%s] \n",
-		       __FUNCTION__,
-		       bc->sid_msg_file);
-	}
-	
-	if(ReadGenFile(barnyard2_conf))
-	{
-	    FatalError("[%s()], failed while processing [%s] \n",
-		       __FUNCTION__,
-		       bc->gen_msg_file);
+	if (!ReadSidFiles(barnyard2_conf)) {
+		FatalError("[%s()], failed while reading sid map files.\n", __FUNCTION__);
 	}
 
 	if(barnyard2_conf->event_cache_size == 0)
 	{
 	    barnyard2_conf->event_cache_size = 2048;
 	}
-	
+
 	LogMessage("Barnyard2 spooler: Event cache size set to [%u] \n",
 		   barnyard2_conf->event_cache_size);
-	
+
     }
 
-    /* Resolve classification integer for signature and free some memory */
-    if(barnyard2_conf->sidmap_version == SIDMAPV2)
-    {
 	if(SignatureResolveClassification(barnyard2_conf->classifications,
 					  BcGetSigNodeHead(),
-					  barnyard2_conf->sid_msg_file,
 					  barnyard2_conf->class_file))
 	{
 	    FatalError("[%s()], Call to SignatureResolveClassification failed \n",
 		       __FUNCTION__);
 	}
-    }
 
     /* pcap_snaplen is already initialized to SNAPLEN */
     //  if (barnyard2_conf->pkt_snaplen != -1)

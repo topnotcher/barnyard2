@@ -254,7 +254,7 @@ static void DeleteVars(VarEntry *);
 static void TransferOutputConfigs(OutputConfig *, OutputConfig **);
 static OutputConfig * DupOutputConfig(OutputConfig *);
 static void RemoveOutputConfigs(OutputConfig **, int);
-
+static void ConfigMsgMap(Barnyard2Config *bc, u_int8_t src, char *file); 
 static void DisallowCrossTableDuplicateVars(Barnyard2Config *, char *, VarType);
 
 /****************************************************************************
@@ -1772,13 +1772,11 @@ void ConfigDumpPayloadVerbose(Barnyard2Config *bc, char *args)
     bc->output_flags |= OUTPUT_FLAG__VERBOSE_DUMP;
 }
 
-void ConfigGenFile(Barnyard2Config *bc, char *args)
-{
-    if ((args == NULL) || (bc == NULL) )
-        return;
-    
-    bc->gen_msg_file = strndup(args,PATH_MAX);
-    return;
+void ConfigGenFile(Barnyard2Config *bc, char *args) {
+	if (args == NULL || bc == NULL )
+		return;
+
+	ConfigMsgMap(bc,SOURCE_GEN_MSG,args);
 }
 
 void ConfigHostname(Barnyard2Config *bc, char *args)
@@ -2138,12 +2136,37 @@ void ConfigShowYear(Barnyard2Config *bc, char *args)
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Enabled year in timestamp\n"););
 }
 
-void ConfigSidFile(Barnyard2Config *bc, char *args)
-{
-    if ((args == NULL) || (bc == NULL) )
-        return;
+void ConfigSidFile(Barnyard2Config *bc, char *args) {
+	if (args == NULL || bc == NULL )
+		return;
 
-    bc->sid_msg_file = strndup(args,PATH_MAX);
+	ConfigMsgMap(bc,SOURCE_SID_MSG,args);
+}
+
+static void ConfigMsgMap(Barnyard2Config *bc, u_int8_t src, char *file) {
+	if (bc == NULL || file == NULL)
+		return;
+	
+	SidMsgMapFileNode *cur = bc->sid_msg_files;
+
+	while (cur != NULL && cur->next != NULL) {
+		//silently ignore a duplicate file.
+		if (strcmp(cur->file,file) == 0)
+			return;
+		cur = cur->next;
+	}
+
+	SidMsgMapFileNode * node = NULL;
+	node = SnortAlloc(sizeof *node);
+	node->file = strndup(file,PATH_MAX);
+	node->type = src;
+	node->next = NULL;
+	node->version = 0;
+
+	if (cur == NULL)
+		bc->sid_msg_files = node;
+	else
+		cur->next = node;
 }
 
 void ConfigUmask(Barnyard2Config *bc, char *args)

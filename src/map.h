@@ -105,6 +105,7 @@ typedef struct _SigNode {
 	sig_class_id_t class_id;
 	sig_priority_id_t priority_id;
 	u_int8_t source_file; /* where was it parsed from */
+	u_int8_t map_ver; /*version of sid-msg.map source*/
 	char *classLiteral;  /* sid-msg.map v2 type only */
 	char *msg; /* messages */
 	ReferenceNode		*refs; /* references (eg bugtraq) */
@@ -143,17 +144,14 @@ ClassType * ClassTypeLookupById(struct _Barnyard2Config *, int);
 
 int ReadReferenceFile(struct _Barnyard2Config *, const char *);
 int ReadClassificationFile(struct _Barnyard2Config *);
-int ReadSidFile(struct _Barnyard2Config *);
-int ReadGenFile(struct _Barnyard2Config *);
-int SignatureResolveClassification(ClassType *class,SidGidMsgMap * sigs, char *sid_map_file,char *classification_file);
+int ReadSidFiles(struct _Barnyard2Config *bc);
+int SignatureResolveClassification(ClassType *class,SidGidMsgMap * sigs,char *classification_file);
 
 void DeleteReferenceSystems(struct _Barnyard2Config *);
 void DeleteReferences(struct _Barnyard2Config *);
 
 void ParseReferenceSystemConfig(struct _Barnyard2Config *, char *args);
 void ParseClassificationConfig(struct _Barnyard2Config *, char *args);
-void ParseSidMapLine(struct _Barnyard2Config *, char *);
-void ParseGenMapLine(char *);
 
 /* Destructors */
 void FreeSigNodes(SidGidMsgMap **);

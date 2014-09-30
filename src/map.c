@@ -65,6 +65,12 @@
 
 static SidMsgMap * LazyInitSidMsgMap(SidGidMsgMap * gidsidmap, u_int32_t gid);
 static void ClearSigNode(SigNode *dn);
+static int ParseSidMapUL(char * data, uint32_t *res, char *field);
+static int ParseSidMapLine(Barnyard2Config *bc, char *data, short map_ver);
+static int ParseGenMapLine(char *data);
+static int ParseSidMapV2Line(Barnyard2Config *bc, char *data);
+static int ParseSidMapV1Line(Barnyard2Config *bc, char *data);
+static int ReadSidFile(Barnyard2Config * bc, SidMsgMapFileNode * file);
 
 /********************* Reference Implementation *******************************/
 
@@ -537,19 +543,18 @@ int ReadClassificationFile(Barnyard2Config *bc)
 
    hence.
 */
-int SignatureResolveClassification(ClassType *class,SidGidMsgMap *sigs,char *sid_msg_file,char *classification_file)
+int SignatureResolveClassification(ClassType *class,SidGidMsgMap *sigs,char *classification_file)
 {
 
 	ClassType *found = NULL;
 
-	if(class == NULL || sigs == NULL || sid_msg_file == NULL || classification_file == NULL)
+	if(class == NULL || sigs == NULL || classification_file == NULL)
 	{
 		DEBUG_WRAP(DebugMessage(DEBUG_MAPS,"ERROR [%s()]: Failed class ptr [0x%x], sig ptr [0x%x], "
-					" sig_map_file ptr [0x%x], classification_file ptr [0x%x] \n",
+					"classification_file ptr [0x%x] \n",
 					__FUNCTION__,
 					class,
 					sigs,
-					sid_msg_file,
 					classification_file););
 		return 1;
 	}
@@ -571,6 +576,8 @@ int SignatureResolveClassification(ClassType *class,SidGidMsgMap *sigs,char *sid
 			if (!kh_exist(sidmsgmap, sid_idx)) continue;
 
 			sig = &kh_value(sidmsgmap, sid_idx);	
+
+			if (sig->map_ver != SIDMAPV2) continue;
 
 			found = NULL;
 
@@ -658,88 +665,241 @@ int SignatureResolveClassification(ClassType *class,SidGidMsgMap *sigs,char *sid
 	return 0;
 }
 
-int ReadSidFile(Barnyard2Config *bc)
-{
-    FILE *fd;
-    char buf[BUFFER_SIZE];
-    char *index;
-    int count = 0;
-    
-    if(bc == NULL)
-    {
-	return 1;
-    }
+/**
+ * Read all SID map (sid msg and gen msg) files from the configuration or
+ * command line. When succesful, parsed signatures are stored in the global
+ * SidMsgMap.
+ *
+ * @param bc barnyard2 configuration
+ *
+ * @return 1 on success; 0 on failure.
+ */
+int ReadSidFiles(Barnyard2Config *bc) {
 
-    if(bc->sid_msg_file == NULL)
-    {
-	return 0;
-    }
+	if (bc == NULL)
+		return 0;
 
-    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "[%s()] map: opening file %s\n", 
-			    __FUNCTION__,
-			    bc->sid_msg_file););   
+	SidMsgMapFileNode *cur;
+	for (cur = bc->sid_msg_files; cur != NULL; cur = cur->next) {
+		if (cur->file == NULL)
+			continue;
 
-    if( (fd = fopen(bc->sid_msg_file, "r")) == NULL )
-    {
-        LogMessage("ERROR: Unable to open SID file '%s' (%s)\n", 
-		   bc->sid_msg_file, 
-		   strerror(errno));
-	return 1;
-    }
-    
-    memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced by memset() */
-    
-    while(fgets(buf, BUFFER_SIZE, fd) != NULL)
-    {
-        index = buf;
-	
-        /* advance through any whitespace at the beginning of the line */
-        while(*index == ' ' || *index == '\t')
-            index++;
-	
-	/* Check if we are dealing with a sidv2 file */
-	if( (count == 0) && 
-	    (bc->sidmap_version == 0))
-	{
-	    if(*index == '#')
-	    {
-		index++;
-		if(strncasecmp(index,SIDMAPV1STRING,strlen(SIDMAPV1STRING)) == 0)
-		{
-		    bc->sidmap_version=SIDMAPV1;
+		if (!ReadSidFile(bc, cur)) {
+			ErrorMessage("Error reading map file: %s\n", cur->file);
+			return 0;
 		}
-		else if( strncasecmp(index,SIDMAPV2STRING,strlen(SIDMAPV2STRING)) == 0)
-		{
-		    bc->sidmap_version=SIDMAPV2;
-		    continue;
-		}
-	    }
-	    else
-	    {
-		bc->sidmap_version=SIDMAPV1;
-	    }
 	}
 
-	/* if it's not a comment or a <CR>, send it to the parser */
-	if((*index != '#') && (*index != 0x0a) && (index != NULL))
-	{
-	    ParseSidMapLine(bc, index);
-	    count++;
-	}
-    }
-    
-    //LogMessage("Read [%u] signature \n",count);
-    
-  if(fd != NULL)
-    fclose(fd);
-
-  return 0;
+	return 1;
 }
 
+/**
+ * Read the contents of a single "map" (sid-msg, gen-msg) file, populating the
+ * global SidMsgMap with each of the signatures read.
+ *
+ * @param bc barnyard2 configuration
+ * @param file the file to read from.
+ *
+ * @return 1 on success; 0 on failure.
+ */
+static int ReadSidFile(Barnyard2Config * bc, SidMsgMapFileNode * file) {
+
+	FILE *fd;
+	char buf[BUFFER_SIZE];
+	int line = 0;
+
+	DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "[%s()] map: opening file %s\n",
+				__FUNCTION__,
+				file->file););
+
+	if( (fd = fopen(file->file, "r")) == NULL ) {
+		LogMessage("ERROR: Unable to open SID file '%s' (%s)\n",
+				file->file,
+				strerror(errno)
+		);
+		return 0;
+	}
+
+	memset(buf, 0, BUFFER_SIZE);
+
+	while(fgets(buf, BUFFER_SIZE, fd) != NULL) {
+		strip(buf);
+		char * idx = strtrim(buf);
+		line++;
+
+		if (idx == NULL)
+			continue;
+
+		/* Check if we are dealing with a sidv2 file */
+		if (line == 1 && file->version == 0) {
+			if (*idx == '#') {
+				idx++;
+				if (strncasecmp(idx,SIDMAPV1STRING,strlen(SIDMAPV1STRING)) == 0)
+					file->version = SIDMAPV1;
+				else if (strncasecmp(idx,SIDMAPV2STRING,strlen(SIDMAPV2STRING)) == 0)
+					file->version = SIDMAPV2;
+
+				continue;
+			} else {
+				file->version = SIDMAPV1;
+			}
+		}
+
+		if (*idx == '#' || *idx == '\0' || *idx == '\n')
+			continue;
+
+		if (file->type == SOURCE_SID_MSG) {
+			if (!ParseSidMapLine(bc, idx, file->version))
+				FatalError("[%s()]: Error parsing sid msg map '%s' on line %d.\n", __FUNCTION__, file->file, line);
+		} else if (file->type == SOURCE_GEN_MSG) {
+			if (!ParseGenMapLine(idx))
+				FatalError("[%s()]: Error parsing gen msg map '%s' on line %d.\n", __FUNCTION__, file->file, line);
+		}
+	}
+
+	if (fd != NULL)
+		fclose(fd);
+
+	return 1;
+}
+
+/**
+ * Parse a field of sid/gid msg-map.
+ *
+ * @param data field to parse
+ * @param res pointer to the parsed result.
+ * @param field the name of the field (e.g. GID) for error messages
+ *
+ * @return 1 on success; 0 on failure.
+ */
+static int ParseSidMapUL(char * data, uint32_t *res, char *field) {
+
+	if (data == NULL || *data == '\0' || res == NULL || field == NULL)
+		return 0;
+
+	char * end;
+	*res = strtoul(data,&end,10);
+
+	if (*end != '\0') {
+		ErrorMessage("[%s()]: error parsing value for %s: '%s'\n", __FUNCTION__, field, data);
+		return 0;
+	}
+
+	return 1;
+}
+
+/**
+ * Parse a single line from a v2 SID MSG map
+ *
+ * @param bc barnyard2 configuration
+ * @param data the line to parse
+ *
+ * @return 1 on success; 0 on error
+ */
+static int ParseSidMapV2Line(Barnyard2Config *bc, char *data) {
+	SigNode t_sn = {0};
+
+	char **toks = NULL;
+	char *idx = NULL;
+
+	int num_toks = 0;
+	const int min_toks = 6;
+	int i = 0;
+
+	toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
+
+	if(num_toks < min_toks) {
+		LogMessage("WARNING: Ignoring bad line in SID file: '%s'\n", data);
+		goto finish;
+	}
+
+	DEBUG_WRAP(DebugMessage(DEBUG_MAPS_DEEP, "map: creating new node\n"););
+
+	for (i = 0; i<num_toks; i++) {
+		strip(toks[i]);
+		idx = strtrim(toks[i]);
+
+		if (idx == NULL || strlen(idx) == 0) {
+			ErrorMessage("[%s()], bad value for line [%s] \n",
+					__FUNCTION__,
+					strerror(errno),
+					data);
+			goto error;
+		}
 
 
-void ParseSidMapLine(Barnyard2Config *bc, char *data) {
-	SigNode t_sn = {0}; 
+		switch(i) {
+		case 0: /*gid */
+			if (!ParseSidMapUL(idx, &t_sn.gid, "gid")) {
+				goto error;
+			}
+
+			break;
+
+		case 1: /* sid */
+			if (!ParseSidMapUL(idx, &t_sn.sid, "sid")) {
+				goto error;
+			}
+			break;
+
+		case 2: /* revision */
+			if (!ParseSidMapUL(idx, &t_sn.rev, "revision")) {
+				goto error;
+			}
+			break;
+
+		case 3: /* classification */
+			if ((t_sn.classLiteral = SnortStrdup(idx)) == NULL) {
+				goto error;
+			}
+			break;
+
+		case 4: /* priority */
+			if (!ParseSidMapUL(idx, &t_sn.priority_id, "priority")) {
+				goto error;
+			}
+			break;
+
+		case 5: /* msg */
+			if ((t_sn.msg = SnortStrdup(idx)) == NULL) {
+				goto error;
+			}
+			break;
+
+		default: /* reference data */
+			ParseReference(bc, idx, &t_sn);
+			break;
+		}
+	}
+
+	t_sn.source_file = SOURCE_SID_MSG;
+	if (CreateSigNode(BcGetSigNodeHead(),&t_sn) == NULL) {
+		ErrorMessage("[%s()], CreateSigNode() returned a NULL node, bailing \n",
+				__FUNCTION__);
+		goto error;
+	}
+
+	int ret = 1;
+	goto finish;
+
+error:
+	ret = 0;
+finish:
+	mSplitFree(&toks, num_toks);
+	return ret;
+}
+
+/**
+ * Parse a single line from a v1 SID MSG map. When successful, the result is
+ * stored in the global SidMsgMap.
+ *
+ * @param bc barnyard2 configuration
+ * @param data the line to parse
+ *
+ * @return 1 on success; 0 on error
+ */
+static int ParseSidMapV1Line(Barnyard2Config *bc, char *data) {
+	SigNode t_sn = {0};
 
 	char **toks = NULL;
 	char *idx = NULL;
@@ -750,143 +910,83 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data) {
 
 	toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
 
-	switch (bc->sidmap_version) {
-	case SIDMAPV1:
-		min_toks = 2;
-		break;
-
-	case SIDMAPV2:
-		min_toks = 6;
-		break;
-
-	default:
-		FatalError("[%s()]: Unknown sidmap file version [%d] \n",
-				__FUNCTION__,
-				bc->sidmap_version);
-	}
-
 	if(num_toks < min_toks) {
 		LogMessage("WARNING: Ignoring bad line in SID file: '%s'\n", data);
-	} else {
-		DEBUG_WRAP(DebugMessage(DEBUG_MAPS_DEEP, "map: creating new node\n"););
+		goto finish;
+	}
+
+	DEBUG_WRAP(DebugMessage(DEBUG_MAPS_DEEP, "map: creating new node\n"););
 
 
-		for (i = 0; i<num_toks; i++) { 
-			strip(toks[i]);
-			idx = strtrim(toks[i]);
+	for (i = 0; i<num_toks; i++) {
+		strip(toks[i]);
+		idx = strtrim(toks[i]);
 
-			if (idx == NULL || strlen(idx) == 0) {
-				LogMessage("\n");
-				FatalError("[%s()], File [%s],\nError in map definition [%s] for value [%s] \n\n",
-						__FUNCTION__,
-						bc->sid_msg_file,
-						data,
-						idx);
-			}
-
-			switch(bc->sidmap_version) {
-			case SIDMAPV1:
-				switch(i)
-				{
-				case 0: /* sid */
-					t_sn.gid = 1;
-					if ((t_sn.sid = strtoul(idx, NULL, 10)) == ULONG_MAX) {
-						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
-								__FUNCTION__,
-								strerror(errno),
-								data);
-					}
-					break;
-
-				case 1: /* msg */
-					if ((t_sn.msg = SnortStrdup(idx)) == NULL) {
-						FatalError("[%s()], error converting string for line [%s] \n",
-								__FUNCTION__,
-								data);
-					}
-					break;
-
-				default: /* reference data */
-					ParseReference(bc, idx, &t_sn);
-					break;
-				}
-				break;
-
-			case SIDMAPV2:
-
-				switch(i)
-				{
-				case 0: /*gid */
-					if ((t_sn.gid = strtoul(idx,NULL,10)) == ULONG_MAX) {
-						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
-								__FUNCTION__,
-								strerror(errno),
-								data);
-					}
-
-					break;
-
-				case 1: /* sid */
-					if ((t_sn.sid = strtoul(idx, NULL, 10)) == ULONG_MAX) {
-						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
-								__FUNCTION__,
-								strerror(errno),
-								data);
-					}
-					break;
-
-				case 2: /* revision */
-					if ((t_sn.rev = strtoul(idx, NULL, 10)) == ULONG_MAX) {
-						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
-								__FUNCTION__,
-								strerror(errno),
-								data);
-					}
-					break;
-
-				case 3: /* classification */
-					if( (t_sn.classLiteral = SnortStrdup(idx)) == NULL) {
-						FatalError("[%s()], error converting string for line [%s] \n",
-								__FUNCTION__,
-								data);
-					}
-					break;
-
-				case 4: /* priority */
-
-					if( (t_sn.priority_id = strtoul(idx, NULL, 10)) == ULONG_MAX) {
-						FatalError("[%s()], error converting integer [%s] for line [%s] \n",
-								__FUNCTION__,
-								strerror(errno),
-								data);
-					}
-					break;
-
-				case 5: /* msg */
-					if( (t_sn.msg = SnortStrdup(idx)) == NULL) {
-						FatalError("[%s()], error converting string for line [%s] \n",
-								__FUNCTION__,
-								data);
-					}
-					break;
-
-				default: /* reference data */
-					ParseReference(bc, idx, &t_sn);
-					break;
-				}
-				break;
-			}
+		if (idx == NULL || strlen(idx) == 0) {
+			ErrorMessage("[%s()], bad value for line [%s] \n",
+					__FUNCTION__,
+					strerror(errno),
+					data);
+			goto error;
 		}
-	} //for???
+
+		switch(i) {
+		case 0: /* sid */
+			t_sn.gid = 1;
+			if (!ParseSidMapUL(idx, &t_sn.sid, "sid")) {
+				goto error;
+			}
+			break;
+
+		case 1: /* msg */
+			if ((t_sn.msg = SnortStrdup(idx)) == NULL) {
+				FatalError("[%s()], error converting string for line [%s] \n",
+						__FUNCTION__,
+						data);
+				goto error;
+			}
+			break;
+
+		default: /* reference data */
+			ParseReference(bc, idx, &t_sn);
+			break;
+		}
+	}
+
 	t_sn.source_file = SOURCE_SID_MSG;
 	if (CreateSigNode(BcGetSigNodeHead(),&t_sn) == NULL) {
 		FatalError("[%s()], CreateSigNode() returned a NULL node, bailing \n",
 				__FUNCTION__);
 	}
 
-	mSplitFree(&toks, num_toks);
+	int ret = 1;
+	goto finish;
 
-	return;
+error:
+	ret = 0;
+finish:
+	mSplitFree(&toks, num_toks);
+	return ret;
+}
+
+/**
+ * Parse a single line of an SID-MSG map.
+ * @see ParseSidMapV1Line()
+ * @see ParseSidMapV2Line()
+ *
+ * @return 0 on success; 1 on failure.
+ */
+static int ParseSidMapLine(Barnyard2Config *bc, char *data, short map_ver) {
+	switch (map_ver) {
+	case SIDMAPV1:
+		return ParseSidMapV1Line(bc,data);
+
+	case SIDMAPV2:
+		return ParseSidMapV2Line(bc,data);
+
+	default:
+		return 1;
+	}
 }
 
 /**
@@ -932,12 +1032,6 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision) {
 	SigNode *sn;
 	khint_t k;
 
-	/* The comment below is not true anymore with  sidmapv2 files generated by pulled pork */
-	/* a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  */
-	/* the same sids and thus can be considered one in the same. */
-	if (BcSidMapVersion() == SIDMAPV1 && gid == 3)
-		gid = 1;
-		
 	map = LazyInitSidMsgMap(sh, gid);
 
 	if (map == NULL)
@@ -947,12 +1041,20 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision) {
 	if (k != kh_end(map) && kh_exist(map,k)) {
 		sn = &kh_value(map,k);
 
-		if (BcSidMapVersion() == SIDMAPV2) {
+		if (sn->map_ver == SIDMAPV2) {
 			if (sn->gid == gid && sn->sid == sid && sn->rev == revision)
 				return sn;
-		} else if (sn->gid == gid && sn->sid == sid) {
-			return sn;
-		}
+		} else if (sn->sid == sid) {
+			if (sn->gid == gid)
+				return sn;
+
+			// This is a hack to handle V1 map files (gid is always 1) being
+			// used with SO_RULES (gid == 3). This is probably something that
+			// should be fixed when the file is read in (e.g. specify a gid in
+			// the config file?).
+			else if (gid == 3 && sn->gid == 1 && sn->map_ver == SIDMAPV1)
+				return sn;
+		} 
 	}
 
 	//sn was not returned => there was no match; create a default.
@@ -962,6 +1064,8 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision) {
 		.gid = gid, 
 		.rev = revision,
 		.msg = (char *)SnortAlloc(42),
+		 /* Version two since this contains an exact rev. */
+		.map_ver = SIDMAPV2,
 		.source_file = SOURCE_GEN_RUNTIME
 	};
 	snprintf(newdata.msg, 42, "Snort Alert [%u:%u:%u]", gid, sid, revision);
@@ -1016,59 +1120,15 @@ SigNode *CreateSigNode(SidGidMsgMap *gidsidmap,SigNode * sn) {
 	return dn;
 }
 
-int ReadGenFile(Barnyard2Config *bc)
-{
-    FILE        *fd;
-    char        buf[BUFFER_SIZE];
-    char        *index;
-    int         count = 0;
-    
-    if(bc->gen_msg_file == NULL)
-    {
-	return 0;
-    }
-    
-    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "[%s()] map: opening file %s\n", 
-			    __FUNCTION__,
-			    bc->gen_msg_file););
-
-    if ( (fd = fopen(bc->gen_msg_file, "r")) == NULL )
-    {
-	LogMessage("ERROR: Unable to open Generator file \"%s\": %s\n", 
-		   bc->gen_msg_file, 
-		   strerror(errno));
-	
-	return 1;
-    }
-    
-    memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced by memset() */
-    
-    while( fgets(buf, BUFFER_SIZE, fd) != NULL )
-    {
-        index = buf;
-
-        /* advance through any whitespace at the beginning of the line */
-        while (*index == ' ' || *index == '\t')
-            index++;
-
-        /* if it's not a comment or a <CR>, send it to the parser */
-        if( (*index != '#') && (*index != 0x0a) && (index != NULL) )
-        {
-            ParseGenMapLine(index);
-	    count++;
-        }
-    }
-    
-    //LogMessage("Read [%u] gen \n",count);
-    
-    if(fd != NULL)
-	fclose(fd);
-    
-    return 0;
-}
-
-
-void ParseGenMapLine(char *data) {
+/**
+ * Parse a single line of a gen-msg.map file. When successful, the results are
+ * stored in the global SidMsgMap.
+ *
+ * @param data the line to parse
+ *
+ * @return 1 on success; 0 on failure.
+ */
+static int ParseGenMapLine(char *data) {
 	char **toks = NULL;
 	char *idx = NULL;
 
@@ -1079,66 +1139,47 @@ void ParseGenMapLine(char *data) {
 
 	toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
 
-	if(num_toks < 2) {
+	if (num_toks < 2) {
 		LogMessage("WARNING: Ignoring bad line in SID file: \"%s\"\n", data);
-		return;
+		goto finish;
 	}
 
-	for(i=0; i<num_toks; i++) {
+	for (i=0; i<num_toks; i++) {
 		strip(toks[i]);
-		idx = toks[i];
-		while(*idx == ' ') idx++;
+		idx = strtrim(toks[i]);
 
 		switch(i) {
 		case 0: /* gen */
-			if( (t_sn.gid = strtoul(idx, NULL, 10)) == ULONG_MAX) {
-				FatalError("[%s()], error converting integer [%s] for line [%s] \n",
-						__FUNCTION__,
-						strerror(errno),
-						data);
+			if (!ParseSidMapUL(idx, &t_sn.gid, "gid")) {
+				goto error;
 			}
 			break;
 
 		case 1: /* sid */
-			if( (t_sn.sid = strtoul(idx, NULL, 10)) == ULONG_MAX) {
-				FatalError("[%s()], error converting integer [%s] for line [%s] \n",
-						__FUNCTION__,
-						strerror(errno),
-						data);
+			if (!ParseSidMapUL(idx, &t_sn.sid, "sid")) {
+				goto error;
 			}
 			break;
 
 		case 2: /* msg */
-			if( (t_sn.msg = SnortStrdup(idx)) == NULL) {
-				FatalError("[%s()], error converting string for line [%s] \n",
+			if ((t_sn.msg = SnortStrdup(idx)) == NULL) {
+				ErrorMessage("[%s()], error converting string for line [%s] \n",
 						__FUNCTION__,
-						data);
+						data
+				);
+				goto error;
 			}
 			break;
 
-		default: 
+		default:
 			break;
 		}
 	}
 
-	switch(BcSidMapVersion()) {
-	case SIDMAPV1:
-		t_sn.rev = 1;
-		t_sn.priority_id = 0;
-		t_sn.classLiteral = strdup("NOCLASS"); /* default */
-		t_sn.class_id = 0;
-		break;
-
-	case SIDMAPV2:
-		/*
-			Generators have pre-defined revision,classification and priority
-			*/
-		t_sn.rev = 1;
-		t_sn.classLiteral = strdup("NOCLASS"); /* default */
-		t_sn.class_id = 0;
-		t_sn.priority_id = 3;
-		break;
-	}
+	t_sn.rev = 1;
+	t_sn.priority_id = 0;
+	t_sn.classLiteral = strdup("NOCLASS"); /* default */
+	t_sn.class_id = 0;
 
 	//there were crazy brother checks here previously.  I don't care about
 	//duplicates. If there's a duplicate, the "newer" one wins every time.
@@ -1148,9 +1189,15 @@ void ParseGenMapLine(char *data) {
 				__FUNCTION__);
 	}
 
-	mSplitFree(&toks, num_toks);
 
-	return;
+	int ret = 1;
+	goto finish;
+
+error:
+	ret = 0;
+finish:
+	mSplitFree(&toks, num_toks);
+	return ret;
 }
 
 /* 
@@ -1240,6 +1287,7 @@ void FreeClassifications(ClassType **i_head)
         if (tmp->type != NULL)
             free(tmp->type);
 
+		break;
         free(tmp);
     }
 
