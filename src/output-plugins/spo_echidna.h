@@ -23,6 +23,6 @@
 #ifndef __SPO_ECHIDNA_H__
 #define __SPO_ECHIDNA_H__
 
-void EchidnaSetup();
+void EchidnaSetup(void);
 
 #endif  /* __SPO_ECHIDNA_H__ */

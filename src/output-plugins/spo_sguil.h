@@ -24,6 +24,6 @@
 #ifndef __SPO_SGUIL_H__
 #define __SPO_SGUIL_H__
 
-void SguilSetup();
+void SguilSetup(void);
 
 #endif  /* __SPO_SGUIL_H__ */

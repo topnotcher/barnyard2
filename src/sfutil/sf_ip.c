@@ -72,7 +72,7 @@ static INLINE int sfip_str_to_fam(const char *str) {
 }
 
 /* Place-holder allocation incase we want to do something more indepth later */
-static INLINE sfip_t *_sfip_alloc() {
+static INLINE sfip_t *_sfip_alloc(void) {
     /* Note: using calloc here instead of SnortAlloc since the dynamic libs 
      * can't presently resolve SnortAlloc */
     return (sfip_t*)calloc(sizeof(sfip_t), 1); 

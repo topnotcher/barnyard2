@@ -126,7 +126,7 @@ int SguilAppendPayloadData(Tcl_DString *, Packet *);
 #endif
 
 /* init routine makes this processor available for dataprocessor directives */
-void SguilSetup()
+void SguilSetup(void)
 {
     /* link the preprocessor keyword to the init function in 
        the preproc list */

@@ -55,7 +55,7 @@ int dump_size;              /* amount of data to print */
 
 extern uint16_t event_id;
 
-void AllocDumpBuf();
+void AllocDumpBuf(void);
 
 
 /***************** LOG ASCII ROUTINES *******************/

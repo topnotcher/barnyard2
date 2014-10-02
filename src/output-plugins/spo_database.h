@@ -554,9 +554,9 @@ void ParseDatabaseArgs(DatabaseData *data);
 void Database(Packet *, void *, uint32_t, void *);
 void SpoDatabaseCleanExitFunction(int, void *);
 void SpoDatabaseRestartFunction(int, void *);
-void InitDatabase();
+void InitDatabase(void);
 void Connect(DatabaseData *);
-void DatabasePrintUsage();
+void DatabasePrintUsage(void);
 
 int Insert(char *, DatabaseData *,u_int32_t);
 int Select(char *, DatabaseData *,u_int32_t *);

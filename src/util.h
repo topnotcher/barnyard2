@@ -214,8 +214,8 @@ int ArchiveFile(const char *, const char *);
 
 char *GetUniqueName(char *);
 char *GetIP(char *);
-char *GetHostname();
-int GetLocalTimezone();
+char *GetHostname(void);
+int GetLocalTimezone(void);
 
 
 u_int32_t fasthex_STATIC(const u_char *xdata, int length,char *retbuf);
@@ -239,7 +239,7 @@ u_int32_t string_sanitize_character(char *input,char ichar);
 ***********************************************************/
 char *GetTimestampByComponent(u_int32_t, u_int32_t, int);
 char *GetTimestampByStruct(register const struct timeval *, int);
-char *GetCurrentTimestamp();
+char *GetCurrentTimestamp(void);
 char *base64(const u_char *, int);
 char *ascii(const u_char *, int);
 char *hex(const u_char *, int);

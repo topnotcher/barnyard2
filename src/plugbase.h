@@ -125,12 +125,12 @@ typedef struct _InputFuncNode
 } InputFuncNode;
 
 void RegisterInputPlugins(void);
-void InitInputPlugins();
+void InitInputPlugins(void);
 int ActivateInputPlugin(char *plugin_name, char *plugin_options);
 void RegisterInputPlugin(char *, InputConfigFunc);
 InputConfigFunc GetInputConfigFunc(char *);
 InputFuncNode *GetInputPlugin(char *);
-void DumpInputPlugins();
+void DumpInputPlugins(void);
 int AddArgToInputList(char *plugin_name, void *arg);
 
 int AddReadRecordHeaderFuncToInputList(char *plugin_name, int (*readRecordHeader)(void *));

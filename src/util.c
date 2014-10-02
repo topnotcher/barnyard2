@@ -1868,7 +1868,7 @@ char *GetUniqueName(char * iface)
  * Returns: A static char * representing the hostname. 
  *
  ***************************************************************************/
-char *GetHostname()
+char *GetHostname(void)
 {
 #ifdef WIN32
     DWORD bufflen = 256;
@@ -2062,7 +2062,7 @@ u_int32_t GetTimestampByStruct_STATIC(register const struct timeval *tvp, int tz
  * Returns: int representing the offset from GMT
  *
  ***************************************************************************/
-int GetLocalTimezone()
+int GetLocalTimezone(void)
 {
     time_t      ut;
     struct tm * ltm;
