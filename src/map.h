@@ -112,10 +112,10 @@ typedef struct _SigNode {
 
 } SigNode;
 
-KHASH_MAP_INIT_INT(_SidMsgMap, SigNode);
-typedef khash_t(_SidMsgMap) SidMsgMap; 
-KHASH_MAP_INIT_INT(_SidGidMsgMap,SidMsgMap*);
-typedef khash_t(_SidGidMsgMap) SidGidMsgMap; 
+KHASH_MAP_INIT_INT(_SidMsgMap, SigNode)
+typedef khash_t(_SidMsgMap) SidMsgMap;
+KHASH_MAP_INIT_INT(_SidGidMsgMap,SidMsgMap*)
+typedef khash_t(_SidGidMsgMap) SidGidMsgMap;
 
 #define SS_SINGLE 0x0001
 #define SS_RANGE  0x0002
