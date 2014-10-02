@@ -614,14 +614,15 @@ int FWsamReadLine(char *buf,unsigned long bufsize,FILE *fp)
         LogMessage("DEBUG => [Alert_FWsam](AlertFWsamReadLine) Line: %s\n",buf);
 #endif
 
-        p=buf;
-        while(isspace(*p))
-          p++;
-        if(p>buf);
-            strcpy(buf,p);
+		int diff = 0;
+        while(isspace(*buf)) {
+		  diff++;
+          buf++;
+		}
+
         if(*buf)
         {
-            p=buf+strlen(buf)-1;    /* remove leading and trailing spaces */
+            p=buf+strnlen(buf,bufsize-diff)-1;    /* remove leading and trailing spaces */
             while(isspace(*p))
                 *p-- =0;
         }
