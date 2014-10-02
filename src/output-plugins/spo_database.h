@@ -574,7 +574,6 @@ u_int32_t checkTransactionState(dbReliabilityHandle *pdbRH);
 u_int32_t checkTransactionCall(dbReliabilityHandle *pdbRH);
 u_int32_t  dbReconnectSetCounters(dbReliabilityHandle *pdbRH);
 u_int32_t MYSQL_ManualConnect(DatabaseData *dbdata);
-u_int32_t dbConnectionStatusMYSQL(dbReliabilityHandle *pdbRH);
 
 void resetTransactionState(dbReliabilityHandle *pdbRH);
 void setTransactionState(dbReliabilityHandle *pdbRH);

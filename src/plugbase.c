@@ -86,10 +86,6 @@ extern InputFuncNode  *InputList;
 extern OutputFuncNode *AlertList;
 extern OutputFuncNode *LogList;
 
-extern Barnyard2Config *barnyard2_conf_for_parsing;
-extern int file_line;
-extern char *file_name;
-
 /***************************** Input Plugin API  *****************************/
 /*InputKeywordList *InputKeywords;
 
@@ -317,8 +313,6 @@ int InputFuncNodeConfigured(InputFuncNode *ifn)
 
 
 /***************************** Output Plugin API  *****************************/
-extern OutputConfigFuncNode *output_config_funcs;
-
 static void AppendOutputFuncList(OutputFunc, void *, OutputFuncNode **);
 
 void RegisterOutputPlugins(void)

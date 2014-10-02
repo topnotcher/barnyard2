@@ -41,8 +41,6 @@ int debuglevel = DEBUG_ALL;
 char *DebugMessageFile = NULL;
 int DebugMessageLine = 0;
 
-extern Barnyard2Config *barnyard2_conf;
-
 int DebugThis(int level)
 {
     if (!(level & GetDebugLevel()))

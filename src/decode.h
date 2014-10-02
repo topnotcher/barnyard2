@@ -1747,7 +1747,6 @@ void DecodeICMP(const uint8_t *, const uint32_t, Packet *);
 void DecodeICMPEmbeddedIP(const uint8_t *, const uint32_t, Packet *);
 void DecodeIPOptions(const uint8_t *, uint32_t, Packet *);
 void DecodeTCPOptions(const uint8_t *, uint32_t, Packet *);
-void DecodeIPOptions(const uint8_t *, uint32_t, Packet *);
 void DecodePPPoEPkt(Packet *, const struct pcap_pkthdr *, const uint8_t *);
 #ifdef GRE
 void DecodeGRE(const uint8_t *, const uint32_t, Packet *);

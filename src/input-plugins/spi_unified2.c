@@ -74,10 +74,6 @@ void Unified2CleanExitFunc(int, void *);
 void Unified2RestartFunc(int, void *);
 
 
-void Unified2PrintEventRecord(Unified2IDSEvent_legacy *);
-void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
-
-
 /*
  * Function: UnifiedLogSetup()
  *

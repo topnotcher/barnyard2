@@ -62,11 +62,6 @@
 #define DEBUG_SID_SUPPRESS          0x00100000
 #define DEBUG_SID_SUPPRESS_PARSE    0x00200000
 
-void DebugMessageFunc(int dbg,char *fmt, ...);
-#ifdef HAVE_WCHAR_H
-void DebugWideMessageFunc(int dbg,wchar_t *fmt, ...);
-#endif
-
 #ifdef DEBUG
 
     extern char *DebugMessageFile;

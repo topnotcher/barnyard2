@@ -47,7 +47,6 @@
 ** PRIVATE FUNCTIONS
 */
 Spooler *spoolerOpen(const char *, const char *, uint32_t);
-int spoolerClose(Spooler *);
 int spoolerReadRecordHeader(Spooler *);
 int spoolerReadRecord(Spooler *);
 void spoolerProcessRecord(Spooler *, int);
@@ -55,7 +54,6 @@ void spoolerFreeRecord(Record *record);
 
 int spoolerWriteWaldo(Waldo *, Spooler *);
 int spoolerOpenWaldo(Waldo *, uint8_t);
-int spoolerCloseWaldo(Waldo *);
 
 
 int spoolerPacketCacheAdd(Spooler *, Packet *);

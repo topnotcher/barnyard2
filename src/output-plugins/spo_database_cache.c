@@ -68,15 +68,8 @@ static u_int32_t ReferenceLookupDatabase(DatabaseData * data, dbReferenceObj * l
 
 
 /* Init FUNCTIONS */
-u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data);
 u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCache,DatabaseData *data);
-u_int32_t CacheSynchronize(DatabaseData *data);
 /* Init FUNCTIONS */
-
-
-/* Destructor */
-void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag);
-/* Destructor */
 
 /* Return largest string lenght */
 static inline u_int32_t glsl(char *a,char *b) {

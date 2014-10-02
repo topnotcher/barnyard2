@@ -46,12 +46,11 @@
 
 
 void PrintIPPkt(FILE *, int,Packet*);
-void PrintEapolPkt(FILE *, Packet *);
-void PrintEapolKey(FILE *, Packet *);
 void PrintNetData(FILE *, const u_char *, const int);
 void ClearDumpBuf(void);
 void Print2ndHeader(FILE *, Packet *);
 void PrintEthHeader(FILE *, Packet *);
+
 #ifdef MPLS
 void PrintMPLSHeader(FILE *, Packet *);
 #endif

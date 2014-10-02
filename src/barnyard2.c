@@ -194,15 +194,6 @@ static struct option long_options[] =
 };
 
 
-/* Externs *******************************************************************/
-/* for getopt */
-extern char *optarg;
-extern int optind;
-extern int opterr;
-extern int optopt;
-
-
-
 /* Private function prototypes ************************************************/
 static void InitNetmasks(void);
 static void InitProtoNames(void);
@@ -228,8 +219,6 @@ static void FreePlugins(Barnyard2Config *);
 
 static void Barnyard2PostInit(void);
 static char * ConfigFileSearch(void);
-
-int SignalCheck(void);
 
 /* Signal handler declarations ************************************************/
 

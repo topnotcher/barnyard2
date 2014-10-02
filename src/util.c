@@ -75,9 +75,6 @@
 #define PATH_MAX_UTIL 1024
 #endif /* PATH_MAX */
 
-extern Barnyard2Config *barnyard2_conf;
-extern int exit_signal;
-
 /*
  * you may need to adjust this on the systems which don't have standard
  * paths defined
