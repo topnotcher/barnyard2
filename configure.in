@@ -20,6 +20,8 @@ if eval "echo $CFLAGS | grep -e -Werror"; then
     ADD_WERROR="yes"
 fi
 
+CFLAGS="$CFLAGS --std=gnu99"
+
 # Disable annoying practice of recursively re-running the autotools
 AM_MAINTAINER_MODE
 AC_PROG_CC_STDC
