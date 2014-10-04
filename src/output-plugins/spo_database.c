@@ -65,8 +65,7 @@ static const char* FATAL_BAD_SCHEMA_1 =
 
 static const char* FATAL_BAD_SCHEMA_2 =
     "          Please re-run the appropriate DB creation script (e.g. create_mysql,\n"
-    "          create_postgresql, create_oracle, create_mssql) located in the\n"
-    "          contrib\\ directory.\n\n"
+    "          create_postgresql located in the contrib\\ directory.\n\n"
     "          See the database documentation for cursory details (doc/README.database).\n"
     "          and the URL to the most recent database plugin documentation.\n";
 
@@ -81,8 +80,7 @@ static const char* FATAL_OLD_SCHEMA_1 =
 static const char* FATAL_OLD_SCHEMA_2 =
     "          If migrating old data is not desired, merely create a new instance\n"
     "          of the snort database using the appropriate DB creation script\n"
-    "          (e.g. create_mysql, create_postgresql, create_oracle, create_mssql)\n"
-    "          located in the contrib\\ directory.\n\n"
+    "          (e.g. create_mysql, create_postgresql) located in the contrib\\ directory.\n\n"
     "          See the database documentation for cursory details (doc/README.database).\n"
     "          and the URL to the most recent database plugin documentation.\n";
 
@@ -412,27 +410,6 @@ void DatabasePluginPrintData(DatabaseData *data)
 	    snprintf(database_in_use_buf, sizeof(database_in_use_buf),
 		     "database: configured to use %s", KEYWORD_POSTGRESQL);
 #endif
-#ifdef ENABLE_ODBC
-        snprintf(database_support_buf, sizeof(database_support_buf),
-                 "database: compiled support for (%s)", KEYWORD_ODBC);
-        if (data->dbtype_id == DB_ODBC)
-	    snprintf(database_in_use_buf, sizeof(database_in_use_buf),
-		     "database: configured to use %s", KEYWORD_ODBC);
-#endif
-#ifdef ENABLE_ORACLE
-        snprintf(database_support_buf, sizeof(database_support_buf),
-                 "database: compiled support for (%s)", KEYWORD_ORACLE);
-        if (data->dbtype_id == DB_ORACLE)
-	    snprintf(database_in_use_buf, sizeof(database_in_use_buf),
-		     "database: configured to use %s", KEYWORD_ORACLE);
-#endif
-#ifdef ENABLE_MSSQL
-        snprintf(database_support_buf, sizeof(database_support_buf),
-                 "database: compiled support for (%s)", KEYWORD_MSSQL);
-        if (data->dbtype_id == DB_MSSQL)
-	    snprintf(database_in_use_buf, sizeof(database_in_use_buf),
-		     "database: configured to use %s", KEYWORD_MSSQL);
-#endif
         LogMessage("%s\n", database_support_buf);
         LogMessage("%s\n", database_in_use_buf);
     }
@@ -562,23 +539,6 @@ void DatabaseInit(char *args)
 	data->dbRH[data->dbtype_id].dbConnectionCount = 0;
 	break;
 #endif /* ENABLE_POSTGRESQL */
-
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-	data->dbRH[data->dbtype_id].dbConnectionStatus = dbConnectionStatusODBC;
-        data->dbRH[data->dbtype_id].dbConnectionCount = 0;
-	break;
-#endif 	/* ENABLE ODBC */
-
-#ifdef ENABLE_ORACLE
-#ifdef ENABLE_MSSQL	
-    case DB_MSSQL:
-    case DB_ORACLE:
-
-	FatalError("database The database family you want to use is currently not supported by this build \n");
-	break;
-#endif 	/* ENABLE MSSQL */
-#endif 	/* ENABLE ORACLE */
 
     default:
 	FatalError("database Unknown database type defined: [%lu] \n",data->dbtype_id);
@@ -1023,26 +983,11 @@ void ParseDatabaseArgs(DatabaseData *data)
     if(!strncasecmp(type,KEYWORD_POSTGRESQL,strlen(KEYWORD_POSTGRESQL)))
         data->dbtype_id = DB_POSTGRESQL;
 #endif
-#ifdef ENABLE_ODBC
-    if(!strncasecmp(type,KEYWORD_ODBC,strlen(KEYWORD_ODBC)))
-        data->dbtype_id = DB_ODBC;
-#endif
-#ifdef ENABLE_ORACLE
-    if(!strncasecmp(type,KEYWORD_ORACLE,strlen(KEYWORD_ORACLE)))
-        data->dbtype_id = DB_ORACLE;
-#endif
-#ifdef ENABLE_MSSQL
-    if(!strncasecmp(type,KEYWORD_MSSQL,strlen(KEYWORD_MSSQL)))
-        data->dbtype_id = DB_MSSQL;
-#endif
 
     if(data->dbtype_id == 0)
     {
         if ( !strncasecmp(type, KEYWORD_MYSQL, strlen(KEYWORD_MYSQL)) ||
-             !strncasecmp(type, KEYWORD_POSTGRESQL, strlen(KEYWORD_POSTGRESQL)) ||
-             !strncasecmp(type, KEYWORD_ODBC, strlen(KEYWORD_ODBC)) ||
-             !strncasecmp(type, KEYWORD_MSSQL, strlen(KEYWORD_MSSQL))  ||
-             !strncasecmp(type, KEYWORD_ORACLE, strlen(KEYWORD_ORACLE)) )
+             !strncasecmp(type, KEYWORD_POSTGRESQL, strlen(KEYWORD_POSTGRESQL)))
         {
             ErrorMessage("ERROR database: '%s' support is not compiled into this build of barnyard2\n\n", type);
             FatalError(FATAL_NO_SUPPORT_1, type, type, type, FATAL_NO_SUPPORT_2);
@@ -1050,8 +995,7 @@ void ParseDatabaseArgs(DatabaseData *data)
         else
         {
            FatalError("database '%s' is an unknown database type.  The supported\n"
-                      "          databases include: MySQL (mysql), PostgreSQL (postgresql),\n"
-                      "          ODBC (odbc), Oracle (oracle), and Microsoft SQL Server (mssql)\n",
+                      "          databases include: MySQL (mysql), PostgreSQL (postgresql),\n",
                       type);
         }
     }
@@ -1212,43 +1156,6 @@ void ParseDatabaseArgs(DatabaseData *data)
         dbarg = strtok(NULL, "=");
     }
     
-    if(data->dbtype_id == DB_ODBC)
-    {
-	/* Print Transaction Warning */
-	if(data->dbname == NULL)
-	{
-	    ErrorMessage("database: no DSN was specified, unable to try to initialize ODBC connection. (use [dbname] parameter, in configuration file to set DSN)\n");
-	    FatalError("");
-	}
-	else
-	{
-	    LogMessage("database: will use DSN [%s] for ODBC Connection setup \n",
-		       data->dbname);
-	}
-	
-	if(data->host != NULL)
-	{
-	    ErrorMessage("database: [host] [%s] will not be used, we will use infromation from the DSN [%s], make sure your setup is ok. \n",
-			 data->host,
-			 data->dbname);
-	}
-
-	if(data->user != NULL)
-	{
-	    ErrorMessage("database: [user] [%s] will not be used, we will use infromation from the DSN [%s], make sure your setup is ok. \n",
-			 data->user,
-			 data->dbname);
-	}
-	
-	if(data->port != NULL)
-	{
-	    ErrorMessage("database: [port] [%s] will not be used, we will use infromation from the DSN [%s], make sure your setup is ok. \n",
-			 data->port,
-			 data->dbname);
-	}
-    }
-    else
-    {
 	if(data->dbname == NULL)
 	{
 	    ErrorMessage("ERROR database: must enter database name in configuration file\n\n");
@@ -1261,7 +1168,6 @@ void ParseDatabaseArgs(DatabaseData *data)
 	    DatabasePrintUsage();
 	    FatalError("");
 	}
-    }
     
     if(data->dbRH[data->dbtype_id].dbConnectionLimit == 0)
     {
@@ -1394,49 +1300,13 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
     
 
 /* Some timestring comments comments */
-    /* SQL Server uses a date format which is slightly
-     * different from the ISO-8601 standard generated
-     * by GetTimestamp() and GetCurrentTimestamp().  We
-     * need to convert from the ISO-8601 format of:
-     *   "1998-01-25 23:59:59+14316557"
-     * to the SQL Server format of:
-     *   "1998-01-25 23:59:59.143"
-     */
-
-    /* Oracle (everything before 9i) does not support
-     * date information smaller than 1 second.
-     * To go along with the TO_DATE() Oracle function
-     * below, this was written to strip out all the
-     * excess information. (everything beyond a second)
-     * Use the Oracle format of:
-     *   "1998-01-25 23:59:59"
-     */
     /* MySql does not support date information smaller than
      * 1 second.  This was written to strip out all the
      * excess information. (everything beyond a second)
      * Use the MySql format of:
      *   "2005-12-23 22:37:16"
-     */
-    /* ODBC defines escape sequences for date data.
-     * These escape sequences are of the format:
-     *   {literal-type 'value'}
-     * The Timestamp (ts) escape sequence handles
-     * date/time values of the format:
-     *   yyyy-mm-dd hh:mm:ss[.f...]
-     * where the number of digits to the right of the
-     * decimal point in a time or timestamp interval
-     * literal containing a seconds component is
-     * dependent on the seconds precision, as contained
-     * in the SQL_DESC_PRECISION descriptor field. (For
-     * more information, see function SQLSetDescField.)
-     *
-     * The number of decimal places within the fraction
-     * of a second is database dependant.  I wasn't able
-     * to easily determine the granularity of this
-     * value using SQL_DESC_PRECISION, so choosing to
-     * simply discard the fractional part.
-     */
-    /* From Posgres Documentation
+	 *
+     * From Posgres Documentation
      * For timestamp with time zone, the internally stored
      * value is always in UTC (GMT). An input value that has
      * an explicit time zone specified is converted to UTC
@@ -1446,8 +1316,6 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
      * parameter, and is converted to UTC using the offset for
      * the TimeZone zone
      */
-/* Some timestring comments comments */
-
 /* 
    COMMENT: -elz
    The new schema will log timestamp in UTC, 
@@ -1462,10 +1330,7 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
     switch(data->dbtype_id)
     {
 	
-    case DB_MSSQL:
     case DB_MYSQL:
-    case DB_ORACLE:
-    case DB_ODBC:
 	if(strlen(data->timestampHolder) > 20)
 	{
 	    data->timestampHolder[19] = '\0';
@@ -1486,55 +1351,8 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
     switch(data->dbtype_id)
     {
 	
-    case  DB_ORACLE:
-	
-	if((data->DBschema_version >= 105) )
-	{
-	    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-			       "INSERT INTO "
-			       "event (sid,cid,signature,timestamp) "
-			       "VALUES (%u, %u, %u, TO_DATE('%s', 'YYYY-MM-DD HH24:MI:SS'));",
-			       data->sid, 
-			       data->cid, 
-			       i_sig_id, 
-			       data->timestampHolder)) != SNORT_SNPRINTF_SUCCESS)
-	    {
-		goto bad_query;
-	    }
-	}
-	else
-	{
-	    /* 
-	       COMMENT: -elz
-	       I just hate useless duplication and this
-	       dosent break anything so just go down please
-	    */
-	    goto GenericEVENTQUERYJMP;
-	    
-	}
-	
-	break;
-	
-
-/* -elz: ODBC with {ts ....} string for timestamp!? nha...
-  if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-			   "INSERT INTO "
-			   "event (sid,cid,signature,timestamp) "
-			   "VALUES (%u, %u, %u, {ts '%s'})",
-			   data->sid, 
-			   data->cid, 
-			   i_sig_id, 
-			   data->timestampHolder)) != SNORT_SNPRINTF_SUCCESS)
-	{
-	    goto bad_query;
-	}
-	break;
-*/
-	
-    case DB_MSSQL:
     case DB_MYSQL:
     case DB_POSTGRESQL:
-    case DB_ODBC:
     default:
 	
     GenericEVENTQUERYJMP:
@@ -1706,46 +1524,20 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 				    }
 			    }
 				
-				
-				if(data->dbtype_id == DB_ORACLE)
+				if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+							"INSERT INTO "
+							"opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
+							"VALUES (%u,%u,%u,%u,%u,%u,'%s');",
+							data->sid,
+							data->cid,
+							i,
+							6,
+							p->tcp_options[i].code,
+							p->tcp_options[i].len,
+							//packet_data))  != SNORT_SNPRINTF_SUCCESS)
+							data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
 				{
-				    /* Oracle field BLOB type case. We append unescaped
-				     * opt_data data after query, which later in Insert()
-				     * will be cut off and uploaded with OCIBindByPos().
-				     */
-				    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-						       "INSERT INTO "
-						       "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
-						       "VALUES (%u,%u,%u,%u,%u,%u,:1);|%s",
-						       data->sid,
-						       data->cid,
-						       i,
-						       6,
-						       p->tcp_options[i].code,
-						       p->tcp_options[i].len,
-						       //packet_data))  != SNORT_SNPRINTF_SUCCESS)
-						       data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
-				    {
-					goto bad_query;
-				    }
-				}
-				else
-				{
-				    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-						       "INSERT INTO "
-						       "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
-						       "VALUES (%u,%u,%u,%u,%u,%u,'%s');",
-						       data->sid,
-						       data->cid,
-						       i,
-						       6,
-						       p->tcp_options[i].code,
-						       p->tcp_options[i].len,
-						       //packet_data))  != SNORT_SNPRINTF_SUCCESS)
-						       data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
-				    {
-					goto bad_query;
-				    }
+				goto bad_query;
 				}
 			    }
 			}
@@ -1909,30 +1701,6 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 
 			    }
 			    
-			    if(data->dbtype_id == DB_ORACLE)
-			    {
-				/* Oracle field BLOB type case. We append unescaped
-				 * opt_data data after query, which later in Insert()
-				 * will be cut off and uploaded with OCIBindByPos().
-				 */
-				if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-						   "INSERT INTO "
-						   "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
-						   "VALUES (%u,%u,%u,%u,%u,%u,:1);|%s",
-						   data->sid,
-						   data->cid,
-						   i,
-						   0,
-						   p->ip_options[i].code,
-						   p->ip_options[i].len,
-						   //packet_data))  != SNORT_SNPRINTF_SUCCESS)
-						   data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
-				{
-				    goto bad_query;
-				}
-			    }
-			    else
-			    {
 				if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
 						   "INSERT INTO "
 						    "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
@@ -1948,7 +1716,6 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 				{
 				    goto bad_query;
 				}
-			    }
 			}
 		    }
 		}
@@ -2007,26 +1774,6 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 			
 			switch(data->dbtype_id)
 			{
-			    
-			case DB_ORACLE:
-			    
-			    /* Oracle field BLOB type case. We append unescaped
-			     * packet_payload data after query, which later in Insert()
-			     * will be cut off and uploaded with OCIBindByPos().
-			     */
-			    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-					       "INSERT INTO "
-					       "data (sid,cid,data_payload) "
-					       "VALUES (%u,%u,:1);|%s",
-					       data->sid,
-					       data->cid,
-					       //packet_data_not_escaped))  != SNORT_SNPRINTF_SUCCESS)
-					       data->PacketDataNotEscaped)) != SNORT_SNPRINTF_SUCCESS)
-			    {
-				goto bad_query;
-			    }
-			    break;
-			    
 			default:
 			    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
 					       "INSERT INTO "
@@ -2281,46 +2028,6 @@ char * snort_escape_string(char * from, DatabaseData * data)
 
     to = (char *)SnortAlloc(strlen(from) * 2 + 1);
     to_start = to;
-#ifdef ENABLE_ORACLE
-    if (data->dbtype_id == DB_ORACLE)
-    {
-	for (end=from+from_length; from != end; from++)
-      {
-        switch(*from)
-        {
-          case '\'':           /*  '  -->  '' */
-            *to++= '\'';
-            *to++= '\'';
-            break;
-          case '\032':         /* Ctrl-Z (Win32 EOF)  -->  \\Z */
-            *to++= '\\';       /* This gives problems on Win32 */
-            *to++= 'Z';
-            break;
-          default:             /* copy character directly */
-            *to++= *from;
-        }
-      }
-    }
-    else
-#endif
-#ifdef ENABLE_MSSQL
-    if (data->dbtype_id == DB_MSSQL)
-    {
-      for (end=from+from_length; from != end; from++)
-      {
-        switch(*from)
-        {
-          case '\'':           /*  '  -->  '' */
-            *to++= '\'';
-            *to++= '\'';
-            break;
-          default:             /* copy character directly */
-            *to++= *from;
-        }
-      }
-    }
-    else
-#endif
 /* Historically these were together in a common "else".
  * Keeping it that way until somebody complains...
  */
@@ -2461,51 +2168,13 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
     
     switch(data->dbtype_id)
     {
-#ifdef ENABLE_ORACLE
-    case DB_ORACLE:
-	for (end=from+from_length; from != end; from++)
-	{
-	    switch(*from)
-	    {
-	    case '\'':           /*  '  -->  '' */
-		*to++= '\'';
-		*to++= '\'';
-		break;
-	    case '\032':         /* Ctrl-Z (Win32 EOF)  -->  \\Z */
-		*to++= '\\';       /* This gives problems on Win32 */
-		*to++= 'Z';
-		break;
-	    default:             /* copy character directly */
-		*to++= *from;
-	    }
-	}
-	break;
-#endif
 
-#ifdef ENABLE_MSSQL
-    case DB_MSSQL:
-
-	for (end=from+from_length; from != end; from++)
-	{
-	    switch(*from)
-	    {
-	    case '\'':           /*  '  -->  '' */
-		*to++= '\'';
-		*to++= '\'';
-		break;
-	    default:             /* copy character directly */
-		*to++= *from;
-	    }
-	}
-	break;
-#endif
 /* Historically these were together in a common "else".
  * Keeping it that way until somebody complains...
  */
 
-#if  defined( ENABLE_MYSQL ) || defined (ENABLE_ODBC)
+#if  defined( ENABLE_MYSQL )
 //#ifdef ENABLE_MYSQL
-    case DB_ODBC:
     case DB_MYSQL:
 	for(end=from+from_length; from != end; from++)
 	{
@@ -2576,7 +2245,7 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 	    }
 	}
     	break;
-#endif /* defined( ENABLE_MYSQL ) || defined (ENABLE_ODBC) */
+#endif /* defined( ENABLE_MYSQL ) */
 	
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
@@ -2759,22 +2428,6 @@ int CheckDBVersion(DatabaseData * data)
 
    DatabaseCleanSelect(data);
 
-#if defined(ENABLE_MSSQL) || defined(ENABLE_ODBC)
-//   if ( data->dbtype_id == DB_MSSQL ||
-   //      (data->dbtype_id==DB_ODBC && data->u_underlying_dbtype_id==DB_MSSQL) )
-   if(data->dbtype_id == DB_ODBC)
-   {
-      /* "schema" is a keyword in SQL Server, so use square brackets
-       *  to indicate that we are referring to the table
-       */
-       if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                          "SELECT vseq FROM [schema]")) != SNORT_SNPRINTF_SUCCESS)
-       {
-	   return 1;
-       }
-   }
-   else
-#endif
    {
 #if defined(ENABLE_MYSQL)
       if (data->dbtype_id == DB_MYSQL)
@@ -2850,37 +2503,6 @@ u_int32_t BeginTransaction(DatabaseData * data)
     switch(data->dbtype_id)
     {
 	
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-	setTransactionState(&data->dbRH[data->dbtype_id]);
-	return 0;
-	break;
-#endif
-
-	
-#ifdef ENABLE_MSSQL
-    case DB_MSSQL:
-	setTransactionState(&data->dbRH[data->dbtype_id]);
-	if( Insert("BEGIN TRANSACTION", data,0))
-	{
-	    /*XXX */ 
-	    return 1;
-	}
-	return 0;
-	
-	break;
-#endif
-#ifdef ENABLE_ORACLE
-    case DB_ORACLE:
-	
-	/* Do nothing.  Oracle will implicitly create a transaction. */
-	/* CHECK -elz i will have to check on that */
-	return 0;
-	break;
-	
-#endif
-
-
     default:
 	setTransactionState(&data->dbRH[data->dbtype_id]);
 	if( Insert("BEGIN;", data,0))
@@ -2923,37 +2545,6 @@ u_int32_t  CommitTransaction(DatabaseData * data)
 
     switch(data->dbtype_id)
     {
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-
-	//if( SQLEndTran(SQL_HANDLE_DBC, data->u_connection, SQL_COMMIT) != SQL_SUCCESS )
-	//{
-	//ODBCPrintError(data,SQL_HANDLE_DBC);
-	//}
-	goto transaction_success;
-	break;
-
-#endif
-#ifdef ENABLE_MSSQL
-
-    case DB_MSSQL:
-    
-	if( Insert("COMMIT TRANSACTION", data,1))
-	{
-	    /* XXX */ 
-	    return 1;
-	}
-	
-	goto transaction_success;
-	break;
-#endif
-#ifdef ENABLE_ORACLE
-    case DB_ORACLE:
-	
-	return Insert("COMMIT WORK", data,1);
-	break;
-#endif
-
     default:
 	
 	if( Insert("COMMIT;", data,1))
@@ -3031,31 +2622,6 @@ u_int32_t RollbackTransaction(DatabaseData * data)
     switch(data->dbtype_id)
     {
 	
-#ifdef ENABLE_ODBC
-  case DB_ODBC:
-  
-//  if( SQLEndTran(SQL_HANDLE_DBC, data->u_connection, SQL_ROLLBACK) != SQL_SUCCESS )
-//  {
-//  ODBCPrintError(data,SQL_HANDLE_DBC);
-//  return 1;
-//    }
-      return 0;
-      break;
-#endif
-  
-	
-
-#ifdef ENABLE_MSSQL
-    case DB_MSSQL:
-	return 	Insert("ROLLBACK TRANSACTION;", data,0);
-	break;
-#endif
-#ifdef ENABLE_ORACLE
-	
-    case DB_ORACLE:
-	return Insert("ROLLBACK WORK;", data,0);
-	break;
-#endif
     default:
 	return Insert("ROLLBACK;", data,0);
     }
@@ -3077,11 +2643,6 @@ u_int32_t RollbackTransaction(DatabaseData * data)
  ******************************************************************************/
 int Insert(char * query, DatabaseData * data,u_int32_t inTransac)
 {
-
-#ifdef ENABLE_ODBC
-    long fRes = 0;
-#endif
-
 
 #if defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)
     int result = 0;
@@ -3184,124 +2745,6 @@ int Insert(char * query, DatabaseData * data,u_int32_t inTransac)
 	
     }
 #endif
-    
-#ifdef ENABLE_ODBC
-    if(data->dbtype_id == DB_ODBC)
-    {
-        if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
-        {
-	    fRes = SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)query, SQL_NTS);
-	    
-	    if( (fRes != SQL_SUCCESS) || 
-		(fRes != SQL_SUCCESS_WITH_INFO))
-	    {
-		result = 0;
-		SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-		return 0;
-	    }
-	    else
-	    {
-		LogMessage("execdirect failed \n");
-	    }
-	}
-	else
-	{
-	    LogMessage("stmtalloc failed \n");
-	}
-	
-	LogMessage("[%s()], failed insert [%s], \n",
-		   __FUNCTION__,
-		   query);
-	ODBCPrintError(data,SQL_HANDLE_STMT);
-	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-    }
-#endif
-
-#ifdef ENABLE_ORACLE
-    if(data->dbtype_id == DB_ORACLE)
-    {
-        char *blob = NULL;
-	
-        /* If BLOB type - split query to actual SQL and blob to BLOB data */
-        if(strncasecmp(query,"INSERT INTO data",16)==0 || strncasecmp(query,"INSERT INTO opt",15)==0)
-        {
-            if((blob=strchr(query,'|')) != NULL)
-            {
-                *blob='\0'; blob++;
-            }
-        }
-
-        if(OCI_SUCCESS == OCIStmtPrepare(data->o_statement
-                                       , data->o_error
-                                       , query
-                                       , strlen(query)
-                                       , OCI_NTV_SYNTAX
-                                       , OCI_DEFAULT))
-        {
-            if( blob != NULL )
-            {
-                OCIBindByPos(data->o_statement
-                           , &data->o_bind
-                           , data->o_error
-                           , 1
-                           , (dvoid *)blob
-                           , strlen(blob)
-                           , SQLT_BIN
-                           , 0
-                           , 0
-                           , 0
-                           , 0
-                           , 0
-                           , OCI_DEFAULT);
-            }
-
-            if(OCI_SUCCESS == OCIStmtExecute(data->o_servicecontext
-                                           , data->o_statement
-                                           , data->o_error
-                                           , 1
-                                           , 0
-                                           , NULL
-                                           , NULL
-                                           , OCI_COMMIT_ON_SUCCESS))
-            {
-                result = 0;
-            }
-        }
-
-        if( result != 1 )
-        {
-            OCIErrorGet(data->o_error
-                      , 1
-                      , NULL
-                      , &data->o_errorcode
-                      , data->o_errormsg
-                      , sizeof(data->o_errormsg)
-                      , OCI_HTYPE_ERROR);
-            ErrorMessage("ERROR database: database: oracle_error: %s\n", data->o_errormsg);
-            ErrorMessage("        : query: %s\n", query);
-        }
-    }
-#endif
-
-#ifdef ENABLE_MSSQL
-    if(data->dbtype_id == DB_MSSQL)
-    {
-        SAVESTATEMENT(query);
-        dbfreebuf(data->ms_dbproc);
-        if( dbcmd(data->ms_dbproc, query) == SUCCEED )
-            if( dbsqlexec(data->ms_dbproc) == SUCCEED )
-                if( dbresults(data->ms_dbproc) == SUCCEED )
-                {
-                    while (dbnextrow(data->ms_dbproc) != NO_MORE_ROWS)
-                    {
-                        result = (int)data->ms_col;
-                    }
-                    result = 0;
-                }
-        CLEARSTATEMENT();
-    }
-#endif
-
     
     return 1;
 }
@@ -3479,133 +2922,6 @@ Select_reconnect:
 
 #endif
 
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-	
-	if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
-	{
-            //if(SQLPrepare(data->u_statement, (ODBC_SQLCHAR *)query, SQL_NTS) == SQL_SUCCESS)
-	    //{
-                //if(SQLExecute(data->u_statement) == SQL_SUCCESS)
-		if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)query, SQL_NTS) == SQL_SUCCESS)
-		{
-		    if(SQLRowCount(data->u_statement, &data->u_rows) == SQL_SUCCESS)
-		    {
-                        if(data->u_rows)
-                        {
-                            if(data->u_rows > 1)
-                            {
-				SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-                                ErrorMessage("ERROR database: Query [%s] returned more than one result\n", query);
-                                result = 0;
-				return 1;
-                            }
-                            else
-                            {
-                                if(SQLFetch(data->u_statement) == SQL_SUCCESS)
-				{
-                                    if(SQLGetData(data->u_statement,1,SQL_INTEGER,
-						  &data->u_col,
-                                                  sizeof(data->u_col), NULL) == SQL_SUCCESS)
-				    {
-                                        *rval = (int)data->u_col;
-					SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-
-
-				    }
-				}
-				else
-				{
-				    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-				    return 1;
-				}
-			    }
-			}
-			else
-			{
-			    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-			    return 1;
-			}
-		    }
-		}
-	}
-	break;
-#endif
-	    
-#ifdef ENABLE_ORACLE
-    case  DB_ORACLE:
-
-        int success = 0;  /* assume it will fail */
-        if(OCI_SUCCESS == OCIStmtPrepare(data->o_statement
-                                       , data->o_error
-                                       , query
-                                       , strlen(query)
-                                       , OCI_NTV_SYNTAX
-                                       , OCI_DEFAULT))
-        {
-            if(OCI_SUCCESS == OCIDefineByPos(data->o_statement
-                                           , &data->o_define
-                                           , data->o_error
-                                           , 1
-                                           , &result
-                                           , sizeof(result)
-                                           , SQLT_INT
-                                           , 0
-                                           , 0
-                                           , 0
-                                           , OCI_DEFAULT))
-            {
-                sword status;
-                status = OCIStmtExecute(data->o_servicecontext
-                                               , data->o_statement
-                                               , data->o_error
-                                               , 1  /*0*/
-                                               , 0
-                                               , NULL
-                                               , NULL
-                                               , OCI_DEFAULT);
-                if( status==OCI_SUCCESS || status==OCI_NO_DATA )
-                {
-                    success = 1;
-                }
-            }
-        }
-
-        if( ! success )
-        {
-            OCIErrorGet(data->o_error
-                      , 1
-                      , NULL
-                      , &data->o_errorcode
-                      , data->o_errormsg
-                      , sizeof(data->o_errormsg)
-                      , OCI_HTYPE_ERROR);
-            ErrorMessage("ERROR database: database: oracle_error: %s\n", data->o_errormsg);
-            ErrorMessage("        : query: %s\n", query);
-        }
-	
-	break;
-#endif
-
-#ifdef ENABLE_MSSQL
-    case DB_MSSQL:
-	
-        SAVESTATEMENT(query);
-        dbfreebuf(data->ms_dbproc);
-        if( dbcmd(data->ms_dbproc, query) == SUCCEED )
-            if( dbsqlexec(data->ms_dbproc) == SUCCEED )
-                if( dbresults(data->ms_dbproc) == SUCCEED )
-                    if( dbbind(data->ms_dbproc, 1, INTBIND, (DBINT) 0, (BYTE *) &data->ms_col) == SUCCEED )
-                        while (dbnextrow(data->ms_dbproc) != NO_MORE_ROWS)
-                        {
-                            result = (int)data->ms_col;
-                        }
-        CLEARSTATEMENT();
-
-	break;
-
-#endif
-	
     default:
 	FatalError("database [%s()]: Invoked with unknown database type [%u] \n",
 		   __FUNCTION__,
@@ -3625,10 +2941,6 @@ Select_reconnect:
  ******************************************************************************/
 void Connect(DatabaseData * data)
 {
-
-#ifdef ENABLE_ODBC
-    ODBC_SQLRETURN ret;
-#endif /* ENABLE_ODBC */
 
     if(data == NULL)
     {
@@ -3745,200 +3057,6 @@ void Connect(DatabaseData * data)
 	
 	break;
 #endif  /* ENABLE_MYSQL */
-	
-#ifdef ENABLE_ODBC
-	
-    case DB_ODBC:
-        data->u_underlying_dbtype_id = DB_UNDEFINED;
-	
-        if(!(SQLAllocEnv(&data->u_handle) == SQL_SUCCESS))
-        {
-            FatalError("database unable to allocate ODBC environment\n");
-        }
-        if(!(SQLAllocConnect(data->u_handle, &data->u_connection) == SQL_SUCCESS))
-        {
-            FatalError("database unable to allocate ODBC connection handle\n");
-        }
-
-        /* The SQL Server ODBC driver always returns SQL_SUCCESS_WITH_INFO
-         * on a successful SQLConnect, SQLDriverConnect, or SQLBrowseConnect.
-         * When an ODBC application calls SQLGetDiagRec after getting
-         * SQL_SUCCESS_WITH_INFO, it can receive the following messages:
-         * 5701 - Indicates that SQL Server put the user's context into the
-         *        default database defined in the data source, or into the
-         *        default database defined for the login ID used in the
-         *        connection if the data source did not have a default database.
-         * 5703 - Indicates the language being used on the server.
-         * You can ignore messages 5701 and 5703; they are only informational.
-         */
-        ret = SQLConnect( data->u_connection
-			  , (ODBC_SQLCHAR *)data->dbname
-			  , SQL_NTS
-			  , (ODBC_SQLCHAR *)data->user
-			  , SQL_NTS
-			  , (ODBC_SQLCHAR *)data->password
-			  , SQL_NTS);
-	
-        if( (ret != SQL_SUCCESS)  && 
-	    (ret != SQL_SUCCESS_WITH_INFO))
-        {
-	    ODBCPrintError(data,SQL_HANDLE_DBC);
-	    FatalError("database ODBC unable to connect.\n");
-	}
-
-/* NOTE: -elz
-   The code below was commented for review, since we want to streamline the api and remove
-   all SQLGetDiagRec call's.
-   
-*/
-	//int  encounteredFailure = 1;  /* assume there is an error */
-        /*  
-	    char odbcError[2000];
-            odbcError[0] = '\0';
-	    
-            if( ret == SQL_SUCCESS_WITH_INFO )
-            {
-	    
-	    ODBC_SQLCHAR   sqlState[6];
-	    ODBC_SQLCHAR   msg[SQL_MAX_MESSAGE_LENGTH];
-	    SQLINTEGER     nativeError;
-	    SQLSMALLINT    errorIndex = 1;
-	    SQLSMALLINT    msgLen;
-	*/
-	/* assume no error unless nativeError tells us otherwise */
-	//encounteredFailure = 0;
-/*
-  while ((ret = SQLGetDiagRec( SQL_HANDLE_DBC
-  , data->u_connection
-  , errorIndex
-  , sqlState
-  , &nativeError
-  , msg
-  , SQL_MAX_MESSAGE_LENGTH
-  , &msgLen)) != SQL_NO_DATA)
-  {
-  if( strstr((const char *)msg, "SQL Server") != NULL )
-  {
-  data->u_underlying_dbtype_id = DB_MSSQL;
-  }
-  
-  if( nativeError!=5701 && nativeError!=5703 )
-  {
-  encounteredFailure = 1;
-  strncat(odbcError, (const char *)msg, sizeof(odbcError));
-  }
-  errorIndex++;
-  }
-  }
-  if( encounteredFailure )
-  {
-  
-  }
-*/
-	
-	break;
-#endif
-
-#ifdef ENABLE_ORACLE
-	
-    case DB_ORACLE:
-
-    #define PRINT_ORACLE_ERR(func_name) \
-     { \
-         OCIErrorGet(data->o_error, 1, NULL, &data->o_errorcode, \
-                     data->o_errormsg, sizeof(data->o_errormsg), OCI_HTYPE_ERROR); \
-         ErrorMessage("ERROR database: Oracle_error: %s\n", data->o_errormsg); \
-         FatalError("database  %s : Connection to database '%s' failed\n", \
-                    func_name, data->dbRH[data->dbtype_id]->dbname); \
-     }
-    
-    if (!getenv("ORACLE_HOME"))
-      {
-         ErrorMessage("ERROR database: ORACLE_HOME environment variable not set\n");
-      }
-
-      if (!data->user || !data->password || !data->dbRH[data->dbtype_id]->dbname)
-      {
-         ErrorMessage("ERROR database: user, password and dbname required for Oracle\n");
-         ErrorMessage("ERROR database: dbname must also be in tnsnames.ora\n");
-      }
-
-      if (data->host)
-      {
-         ErrorMessage("ERROR database: hostname not required for Oracle, use dbname\n");
-         ErrorMessage("ERROR database: dbname  must be in tnsnames.ora\n");
-      }
-
-      if (OCIInitialize(OCI_DEFAULT, NULL, NULL, NULL, NULL))
-         PRINT_ORACLE_ERR("OCIInitialize");
-
-      if (OCIEnvInit(&data->o_environment, OCI_DEFAULT, 0, NULL))
-         PRINT_ORACLE_ERR("OCIEnvInit");
-
-      if (OCIEnvInit(&data->o_environment, OCI_DEFAULT, 0, NULL))
-         PRINT_ORACLE_ERR("OCIEnvInit (2)");
-
-      if (OCIHandleAlloc(data->o_environment, (dvoid **)&data->o_error, OCI_HTYPE_ERROR, (size_t) 0, NULL))
-         PRINT_ORACLE_ERR("OCIHandleAlloc");
-
-      if (OCILogon(data->o_environment, data->o_error, &data->o_servicecontext,
-                   data->user, strlen(data->user), data->password, strlen(data->password),
-                   data->dbRH[data->dbtype_id]->dbname, strlen(data->dbRH[data->dbtype_id]->dbname)))
-      {
-         OCIErrorGet(data->o_error, 1, NULL, &data->o_errorcode, data->o_errormsg, sizeof(data->o_errormsg), OCI_HTYPE_ERROR);
-         ErrorMessage("ERROR database: oracle_error: %s\n", data->o_errormsg);
-         ErrorMessage("ERROR database: Checklist: check database is listed in tnsnames.ora\n");
-         ErrorMessage("ERROR database:            check tnsnames.ora readable\n");
-         ErrorMessage("ERROR database:            check database accessible with sqlplus\n");
-         FatalError("database OCILogon : Connection to database '%s' failed\n", data->dbRH[data->dbtype_id]->dbname);
-      }
-
-      if (OCIHandleAlloc(data->o_environment, (dvoid **)&data->o_statement, OCI_HTYPE_STMT, 0, NULL))
-         PRINT_ORACLE_ERR("OCIHandleAlloc (2)");
-      break;
-#endif
-
-#ifdef ENABLE_MSSQL
-      
-    case DB_MSSQL:
-	
-        CLEARSTATEMENT();
-        dberrhandle(mssql_err_handler);
-        dbmsghandle(mssql_msg_handler);
-
-        if( dbinit() != NULL )
-        {
-            data->ms_login = dblogin();
-            if( data->ms_login == NULL )
-            {
-                FatalError("database Failed to allocate login structure\n");
-            }
-            /* Set up some informational values which are stored with the connection */
-            DBSETLUSER (data->ms_login, data->user);
-            DBSETLPWD  (data->ms_login, data->password);
-            DBSETLAPP  (data->ms_login, "snort");
-
-            data->ms_dbproc = dbopen(data->ms_login, data->host);
-            if( data->ms_dbproc == NULL )
-            {
-                FatalError("database Failed to logon to host '%s'\n", data->host);
-            }
-            else
-            {
-                if( dbuse( data->ms_dbproc, data->dbRH[data->dbtype_id]->dbname ) != SUCCEED )
-                {
-                    FatalError("database Unable to change context to database '%s'\n", data->dbRH[data->dbtype_id]->dbname);
-                }
-            }
-        }
-        else
-        {
-            FatalError("database Connection to database '%s' failed\n", data->dbRH[data->dbtype_id]->dbname);
-        }
-        CLEARSTATEMENT();
-	break;
-#endif
-	
     default:
 	FatalError("database [%s()]: Invoked with unknown database type [%u] \n",
 		   __FUNCTION__,
@@ -4015,51 +3133,6 @@ void Disconnect(DatabaseData * data)
 	break;
 #endif
 
-#ifdef ENABLE_ODBC
-        
-    case DB_ODBC:
-
-	if(data->u_handle)
-	{
-	    SQLDisconnect(data->u_connection);
-	    SQLFreeHandle(SQL_HANDLE_ENV, data->u_handle);
-	}
-	break;
-#endif
-
-#ifdef ENABLE_ORACLE
-    case DB_ORACLE:
-
-	if(data->o_servicecontext)
-            {
-                OCILogoff(data->o_servicecontext, data->o_error);
-                if(data->o_error)
-                {
-                    OCIHandleFree((dvoid *)data->o_error, OCI_HTYPE_ERROR);
-                }
-                if(data->o_statement)
-                {
-                    OCIHandleFree((dvoid *)data->o_statement, OCI_HTYPE_STMT);
-                }
-            }
-        break;
-#endif
-
-#ifdef ENABLE_MSSQL
-        
-    case DB_MSSQL:
-	
-            CLEARSTATEMENT();
-            if( data->ms_dbproc != NULL )
-            {
-                dbfreelogin(data->ms_login);
-                data->ms_login = NULL;
-                dbclose(data->ms_dbproc);
-                data->ms_dbproc = NULL;
-            }
-	    break;
-#endif
-	    
     default:
 	FatalError("database [%s()]: Invoked with unknown database type [%u] \n",
                    __FUNCTION__,
@@ -4081,8 +3154,7 @@ void DatabasePrintUsage(void)
     puts(" log facility.\n");
 
     puts(" For the first argument, you must supply the type of database.");
-    puts(" The possible values are mysql, postgresql, odbc, oracle and");
-    puts(" mssql ");
+    puts(" The possible values are mysql, postgresql.");
 
     puts(" The parameter list consists of key value pairs. The proper");
     puts(" format is a list of key=value pairs each separated a space.\n");
@@ -4199,59 +3271,6 @@ void SpoDatabaseRestartFunction(int signal, void *arg)
     
     return;
 }
-
-
-/* CHECKME: -elz , compilation with MSSQL will have to be worked out ... */
-#ifdef ENABLE_MSSQL
-/*
- * The functions mssql_err_handler() and mssql_msg_handler() are callbacks that are registered
- * when we connect to SQL Server.  They get called whenever SQL Server issues errors or messages.
- * This should only occur whenever an error has occurred, or when the connection switches to
- * a different database within the server.
- */
-static int mssql_err_handler(PDBPROCESS dbproc, int severity, int dberr, int oserr,
-                             LPCSTR dberrstr, LPCSTR oserrstr)
-{
-    int retval;
-    ErrorMessage("ERROR database: DB-Library error:\n\t%s\n", dberrstr);
-
-    if ( severity == EXCOMM && (oserr != DBNOERR || oserrstr) )
-        ErrorMessage("ERROR database: Net-Lib error %d:  %s\n", oserr, oserrstr);
-    if ( oserr != DBNOERR )
-        ErrorMessage("ERROR database: Operating-system error:\n\t%s\n", oserrstr);
-#ifdef ENABLE_MSSQL_DEBUG
-    if( strlen(g_CurrentStatement) > 0 )
-        ErrorMessage("ERROR database:  The above error was caused by the following statement:\n%s\n", g_CurrentStatement);
-#endif
-    if ( (dbproc == NULL) || DBDEAD(dbproc) )
-        retval = INT_EXIT;
-    else
-        retval = INT_CANCEL;
-    return(retval);
-}
-
-
-static int mssql_msg_handler(PDBPROCESS dbproc, DBINT msgno, int msgstate, int severity,
-                             LPCSTR msgtext, LPCSTR srvname, LPCSTR procname, DBUSMALLINT line)
-{
-    ErrorMessage("ERROR database: SQL Server message %ld, state %d, severity %d: \n\t%s\n",
-                 msgno, msgstate, severity, msgtext);
-    if ( (srvname!=NULL) && strlen(srvname)!=0 )
-        ErrorMessage("Server '%s', ", srvname);
-    if ( (procname!=NULL) && strlen(procname)!=0 )
-        ErrorMessage("Procedure '%s', ", procname);
-    if (line !=0)
-        ErrorMessage("Line %d", line);
-    ErrorMessage("\n");
-#ifdef ENABLE_MSSQL_DEBUG
-    if( strlen(g_CurrentStatement) > 0 )
-        ErrorMessage("ERROR database:  The above error was caused by the following statement:\n%s\n", g_CurrentStatement);
-#endif
-
-    return(0);
-}
-#endif
-
 
 /* Database Reliability */
 
@@ -4658,112 +3677,6 @@ MYSQL_RetryConnection:
     return 1;
 }
 #endif
-    
-#ifdef ENABLE_ODBC
-u_int32_t dbConnectionStatusODBC(dbReliabilityHandle *pdbRH)
-{
-    DatabaseData *data = NULL;
-    u_int32_t StateFail = 0;
-    ODBC_SQLRETURN  ret;    
-    ODBC_SQLCHAR    sqlState[6];
-    ODBC_SQLCHAR    msg[SQL_MAX_MESSAGE_LENGTH] = {0};
-    SQLINTEGER      nativeError;
-    SQLSMALLINT     errorIndex = 1;
-    SQLSMALLINT     msgLen;
-
-    //DEBUGGGGGGGGGGGGGGGGGGG
-    return 0;
-    //DEBUGGGGGGGGGGGGGGGGGGG
-
-    if( (pdbRH == NULL) ||
-        (pdbRH->dbdata == NULL))
-    {
-        /* XXX */
-        return 1;
-    }
-    data =  pdbRH->dbdata;
-    
-    if(data->u_connection != NULL)
-    {
-	while ( (ret = SQLGetDiagRec(  SQL_HANDLE_DBC
-				       , data->u_connection
-				       , errorIndex
-				       , sqlState
-				       , &nativeError
-				       , msg
-				       , SQL_MAX_MESSAGE_LENGTH
-				       , &msgLen)) == SQL_SUCCESS)
-	{
-	    if(StateFail == 0)
-	    {
-		/* Destroy the statement handle */
-		if(data->u_statement != NULL)
-		{
-		    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
-		}
-		
-		if(data->u_connection != NULL)
-		{
-		    SQLFreeHandle(SQL_HANDLE_DBC,data->u_connection);
-		}
-	
-		if(data->u_handle != NULL)
-		{
-		    SQLFreeHandle(SQL_HANDLE_ENV,data->u_statement);
-		}
-	
-		if(checkTransactionState(pdbRH))
-		{
-		    /* ResetState for the caller */
-		    setReconnectState(pdbRH,1);
-		    setTransactionCallFail(pdbRH);
-		    setTransactionState(pdbRH);
-		}
-		StateFail = 1;
-	    
-		if(!(SQLAllocEnv(&data->u_handle) == SQL_SUCCESS))
-		{
-		    FatalError("database unable to allocate ODBC environment\n");
-		}
-		
-		if(!(SQLAllocConnect(data->u_handle, &data->u_connection) == SQL_SUCCESS))
-		{
-		    FatalError("database unable to allocate ODBC connection handle\n");
-		}
-		
-		/* The SQL Server ODBC driver always returns SQL_SUCCESS_WITH_INFO
-		 * on a successful SQLConnect, SQLDriverConnect, or SQLBrowseConnect.
-		 * When an ODBC application calls SQLGetDiagRec after getting
-		 * SQL_SUCCESS_WITH_INFO, it can receive the following messages:
-		 * 5701 - Indicates that SQL Server put the user's context into the
-		 *        default database defined in the data source, or into the
-		 *        default database defined for the login ID used in the
-		 *        connection if the data source did not have a default database.
-		 * 5703 - Indicates the language being used on the server.
-		 * You can ignore messages 5701 and 5703; they are only informational.
-		 */
-		ret = SQLConnect( data->u_connection
-				  , (ODBC_SQLCHAR *)data->dbname
-				  , SQL_NTS
-				  , (ODBC_SQLCHAR *)data->user
-				  , SQL_NTS
-				  , (ODBC_SQLCHAR *)data->password
-				  , SQL_NTS);
-		
-		if( (ret != SQL_SUCCESS)  &&
-		    (ret != SQL_SUCCESS_WITH_INFO))
-		{
-		    ODBCPrintError(data,SQL_HANDLE_DBC);
-		    FatalError("database ODBC unable to connect.\n");
-		}
-	    }
-	}
-    }
-    
-    return 0;
-
-}
-#endif  /* ENABLE_ODBC */
 
 #ifdef ENABLE_POSTGRESQL
 u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
@@ -4898,96 +3811,5 @@ conn_test:
     return 0;
 }
 #endif
-
-#ifdef ENABLE_ORACLE
-u_int32_t dbConnectionStatusORACLE(dbReliabilityHandle *pdbRH)
-{
-    if( (pdbRH == NULL) ||
-        (pdbRH->dbdata == NULL))
-    {
-        /* XXX */
-        return 1;
-    }
-
-    return 0;
-}
-#endif
-
-#ifdef ENABLE_MSSQL
-u_int32_t dbConnectionStatusMSSQL(struct  dbReliabilityHandle *pdbRH);
-{
-    if( (pdbRH == NULL) ||
-        (pdbRH->dbdata == NULL))
-    {
-        /* XXX */
-        return 1;
-    }
-
-    return 0;
-}
-#endif
-
-#ifdef ENABLE_ODBC
-void ODBCPrintError(DatabaseData *data,SQLSMALLINT iHandleType)
-{
-    ODBC_SQLRETURN  ret;
-    ODBC_SQLCHAR    sqlState[6];
-    ODBC_SQLCHAR    msg[SQL_MAX_MESSAGE_LENGTH];
-    SQLINTEGER      nativeError;
-    SQLSMALLINT     errorIndex = 1;
-    SQLSMALLINT     msgLen;
-    
-    void * selected_handle;
-
-    if(data == NULL)
-    {
-	/* XXX */
-	return;
-    }    
-    
-    switch(iHandleType)
-    {
-	
-    case SQL_HANDLE_DBC:
-	selected_handle = data->u_connection;
-	break;
-	
-    case SQL_HANDLE_STMT:
-	selected_handle = data->u_statement;
-	break;
-	
-    default:
-	LogMessage("Database [%s()]: Unknown statement type [%u] \n",
-		   __FUNCTION__,
-		   iHandleType);
-	return;
-	break;
-    }
-    
-    /* assume no errror unless nativeError tells us otherwise */
-    while ( (ret = SQLGetDiagRec(  iHandleType
-				   , selected_handle
-				   , errorIndex
-				   , sqlState
-				   , &nativeError
-				   , msg
-				   , SQL_MAX_MESSAGE_LENGTH
-				   , &msgLen)) == SQL_SUCCESS)
-    {
-	ErrorMessage("[%s()]: Error Index [%u] Error Message [%s] \n",
-		     __FUNCTION__,
-		     errorIndex,
-		     msg);
-		     
-	DEBUG_WRAP(LogMessage("database: %s\n", msg););
-	errorIndex++;
-    }
-
-
-    return;
-}
-#endif /* ENABLE_ODBC */
-
-
 
 /* Database Reliability */
