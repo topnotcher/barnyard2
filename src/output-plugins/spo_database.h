@@ -45,6 +45,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdarg.h>
+#include <inttypes.h>
+#include <stdio.h>
 
 #include "barnyard2.h"
 #include "debug.h"
@@ -78,10 +81,6 @@
 
 #include "map.h"
 #include "plugbase.h"
-
-#ifndef DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN
-#define DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN MAX_QUERY_LENGTH /* Should theorically be enough to escape ....alot of queries */
-#endif /* DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN */
 
 #ifndef MAX_SQL_QUERY_OPS
 #define MAX_SQL_QUERY_OPS 50 /* In case we get a IP packet with 40 options */
@@ -353,7 +352,6 @@ typedef struct _DatabaseData
     char timestampHolder[SMALLBUFFER]; /* For timestamp conversion .... */
     char PacketDataNotEscaped[MAX_QUERY_LENGTH];
     char PacketData[MAX_QUERY_LENGTH];
-    char sanitize_buffer[DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN];
     /* Some static allocated buffers, they might need some cleanup before release */
     
     /* Used for generic queries if you need consequtives queries uses SQLQueryList*/
@@ -451,8 +449,8 @@ void DatabaseSetup(void);
 /******** Prototypes  **************************************************/
 /* NOTE: -elz prototypes will need some cleanup before release */
 DatabaseData *InitDatabaseData(char *args);
-char *snort_escape_string(char *, DatabaseData *);
-u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,DatabaseData *data);
+
+int db_fmt_escape(DatabaseData * db, char * buf, size_t buf_size, char * fmt, ...);
 
 void DatabaseInit(char *);
 void DatabaseInitFinalize(int unused, void *arg);

@@ -386,14 +386,6 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
 	    strncpy(LobjNode.obj.sig_class_name,cNode->type,CLASS_NAME_LEN);
 	    LobjNode.obj.sig_class_name[CLASS_NAME_LEN-1] = '\0'; //safety.
 	    
-	    if( (snort_escape_string_STATIC(LobjNode.obj.sig_class_name,CLASS_NAME_LEN,data)))
-	    {
-		FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-			   "[%s], Exiting. \n",
-			   __FUNCTION__,
-			   LobjNode.obj.sig_class_name);
-	    }
-	    
 	}
 	else
 	{
@@ -480,11 +472,10 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
     }
     
     
-    DatabaseCleanSelect(data);
-    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                       SQL_SELECT_ALL_CLASSIFICATION)!=  SNORT_SNPRINTF_SUCCESS))
+	if (db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH,
+				SQL_SELECT_ALL_CLASSIFICATION) < 0)
     {
-        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], failed to escape query ...\n",
 		   __FUNCTION__);
     }
     
@@ -605,14 +596,6 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
                                 strncpy(cPtr->sig_class_name,row[i],CLASS_NAME_LEN);
 				cPtr->sig_class_name[CLASS_NAME_LEN-1] = '\0'; //safety
 
-				if( (snort_escape_string_STATIC(cPtr->sig_class_name,CLASS_NAME_LEN,data)))
-				{
-				    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-					       "[%s], Exiting. \n",
-					       __FUNCTION__,
-					       cPtr->sig_class_name);
-				}
-
 
                                 break;
 				
@@ -723,15 +706,6 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 			    case 1:
 				strncpy(cPtr->sig_class_name,pg_val,CLASS_NAME_LEN);
 				cPtr->sig_class_name[CLASS_NAME_LEN-1] = '\0'; //safety
-
-				if( (snort_escape_string_STATIC(cPtr->sig_class_name,CLASS_NAME_LEN,data)))
-                                {
-                                    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-                                               "[%s], Exiting. \n",
-                                               __FUNCTION__,
-                                               cPtr->sig_class_name);
-                                }
-
 
 				break;
 			    default:
@@ -905,30 +879,18 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
             inserted_classification_object_count++;
 #endif
 
-	    /* DONE at object insertion
-	      if( (snort_escape_string_STATIC(cacheHead->obj.sig_class_name,CLASS_NAME_LEN,data)))
-	      {
-	      FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-	      "[%s], Exiting. \n",
-	      __FUNCTION__,
-	      cacheHead->obj.sig_class_name);
-	      }
-	    */
-	    
-	    DatabaseCleanInsert(data);
-
-	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-			       SQL_INSERT_CLASSIFICATION,
-			       cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
+		if (db_fmt_escape(data, data->SQL_INSERT, MAX_QUERY_LENGTH,
+					SQL_INSERT_CLASSIFICATION,
+					cacheHead->obj.sig_class_name) < 0)
 	    {
 		/* XXX */
 		goto TransactionFail;
 	    }
 
 
-	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-			       SQL_SELECT_SPECIFIC_CLASSIFICATION,
-			       cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
+		if (db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH,
+					SQL_SELECT_SPECIFIC_CLASSIFICATION,
+					cacheHead->obj.sig_class_name) < 0)
 	    {
 		/* XXX */
 		    goto TransactionFail;
@@ -1105,22 +1067,13 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
         return 1;
     }
 
-    if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
-    {
-        /* XXX */
-        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
-                   __FUNCTION__,
-                   data->SQL_SELECT);
-    }
-    
-    DatabaseCleanSelect(data);
-    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-		       SQL_SELECT_SPECIFIC_SIGNATURE_WITHOUT_MESSAGE,
-		       sObj->sid,
-		       sObj->gid,
-		       sObj->rev,
-		       sObj->class_id,
-		       sObj->priority_id)) !=  SNORT_SNPRINTF_SUCCESS)
+	if (db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH,
+				SQL_SELECT_SPECIFIC_SIGNATURE_WITHOUT_MESSAGE,
+				sObj->sid,
+				sObj->gid,
+				sObj->rev,
+				sObj->class_id,
+				sObj->priority_id) < 0)
     {
 	/* XXX */
 	return 1;
@@ -1213,32 +1166,27 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,dbSignatureObj * sig,int
 		inserted_signature_object_count++;
 #endif 
 
-		DatabaseCleanInsert(data);
-
-
-		if((SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-						SQL_INSERT_SIGNATURE,
-						sig->sid,
-						sig->gid,
-						sig->rev,
-						sig->class_id,
-						sig->priority_id,
-						sig->message)) !=  SNORT_SNPRINTF_SUCCESS)
+		if (db_fmt_escape(data, data->SQL_INSERT, MAX_QUERY_LENGTH,
+					SQL_INSERT_SIGNATURE,
+					sig->sid,
+					sig->gid,
+					sig->rev,
+					sig->class_id,
+					sig->priority_id,
+					sig->message) < 0)
 		{
 			/* XXX */
 			goto TransactionFail;
 		}
 
-		DatabaseCleanSelect(data);
-
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-						SQL_SELECT_SPECIFIC_SIGNATURE,
-						sig->sid,
-						sig->gid,
-						sig->rev,
-						sig->class_id,
-						sig->priority_id,
-						sig->message)) !=  SNORT_SNPRINTF_SUCCESS)
+		if (db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH,
+					SQL_SELECT_SPECIFIC_SIGNATURE,
+					sig->sid,
+					sig->gid,
+					sig->rev,
+					sig->class_id,
+					sig->priority_id,
+					sig->message) < 0)
 		{
 			/* XXX */
 			goto TransactionFail;
@@ -1347,9 +1295,9 @@ static u_int32_t SignatureInsertReference(DatabaseData * data, u_int32_t db_sig_
 	if (ReferenceLookup(data, &dbRef) == 0)
 		return 1;
 	
-	int res = SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH, SQL_INSERT_SIGREF, dbRef.ref_id, db_sig_id, seq);
+	int res = db_fmt_escape(data, data->SQL_INSERT, MAX_QUERY_LENGTH, SQL_INSERT_SIGREF, dbRef.ref_id, db_sig_id, seq);
 
-	if (res != SNORT_SNPRINTF_SUCCESS)
+	if (res < 0)
 		return 1; 
 
 	if (Insert(data->SQL_INSERT, data, 1))
@@ -1475,10 +1423,10 @@ static u_int32_t ReferenceSystemLookupDatabase(DatabaseData * data, dbSystemObj 
 	if (data == NULL || lookup == NULL)
 		return 1;
 	
-	res = SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH, 
+	res = db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH, 
 			SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM, lookup->name, lookup->url);
 
-	if (res != SNORT_SNPRINTF_SUCCESS)
+	if (res < 0)
 		return 1; 
 
 	if (Select(data->SQL_SELECT,data, &db_ref_system_id))
@@ -1508,17 +1456,9 @@ static u_int32_t ReferenceSystemPopulateDatabase(DatabaseData * data, dbSystemOb
 	if (sys == NULL)
 		return 1;
 
-	//@TODO this escaping seems like a mess
-	//@TODO make a function to escape and query. 
-	if (snort_escape_string_STATIC(sys->name, SYSTEM_NAME_LEN, data))
-		return 1;
-
-	if (snort_escape_string_STATIC(sys->url, SYSTEM_URL_LEN, data))
-		return 1;
-
-	if (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH, 
+	if (db_fmt_escape(data, data->SQL_INSERT, MAX_QUERY_LENGTH, 
 				SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM, 
-				sys->name, sys->url) != SNORT_SNPRINTF_SUCCESS)	
+				sys->name, sys->url) < 0)	
 		return 1;
 
 	if (Insert(data->SQL_INSERT, data, 1)) 
@@ -1565,16 +1505,11 @@ static u_int32_t ReferencePopulateDatabase(DatabaseData * data, dbReferenceObj *
 	if (data == NULL || ref == NULL)
 		return 1;
 
-	//@TODO this god fucking damn escaping again
-	if (snort_escape_string_STATIC(ref->ref_tag, REF_TAG_LEN, data))
+	if (db_fmt_escape(data, data->SQL_INSERT, MAX_QUERY_LENGTH, SQL_INSERT_SPECIFIC_REF,
+			ref->system_id, ref->ref_tag) < 0)
 		return 1;
 
-	if (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH, 
-				SQL_INSERT_SPECIFIC_REF, 
-				ref->system_id, ref->ref_tag) != SNORT_SNPRINTF_SUCCESS)	
-		return 1;
-
-	if (Insert(data->SQL_INSERT, data, 1)) 
+	if (Insert(data->SQL_INSERT, data, 1))
 		return 1;
 
 	return ReferenceLookupDatabase(data, ref);
@@ -1592,16 +1527,16 @@ static u_int32_t ReferencePopulateDatabase(DatabaseData * data, dbReferenceObj *
  */
 static u_int32_t ReferenceLookupDatabase(DatabaseData * data, dbReferenceObj * lookup) {
 	u_int32_t db_ref_id = 0;
-	int res;
 
 	if (data == NULL || lookup == NULL)
 		return 1;
-	
-	res = SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH, 
-			SQL_SELECT_SPECIFIC_REF, lookup->system_id, lookup->ref_tag);
 
-	if (res != SNORT_SNPRINTF_SUCCESS)
-		return 1; 
+	int res = db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH, SQL_SELECT_SPECIFIC_REF,
+			lookup->system_id, lookup->ref_tag
+	);
+
+	if (res < 0)
+		return 1;
 
 	if (Select(data->SQL_SELECT,data, &db_ref_id))
 		return 1;

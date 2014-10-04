@@ -37,7 +37,6 @@
 
 /******** fatals *******************************************************/
 
-
 /* these strings deliberately break fatal error messages into
    chunks with lengths < 509 to keep ISO C89 compilers happy
  */
@@ -99,6 +98,17 @@ static const char* FATAL_NO_SUPPORT_2 =
 
 
 #include "output-plugins/spo_database.h"
+
+static size_t db_escape_string(DatabaseData * dbh, char * buf, size_t buf_size, char * str);
+
+#ifdef ENABLE_MYSQL
+static size_t db_escape_string_mysql(DatabaseData * dbh, char * buf, size_t buf_size, char * str);
+#endif
+
+#ifdef ENABLE_POSTGRESQL
+static size_t db_escape_string_postgresql(DatabaseData * dbh, char * buf, size_t buf_size, char * str);
+#endif
+
 
 void DatabaseCleanSelect(DatabaseData *data)
 {
@@ -328,11 +338,10 @@ u_int32_t SynchronizeEventId(DatabaseData *data)
     for(itr = 0; itr < num_tables ; itr++)
     {
 	c_cid = 0;
-	DatabaseCleanSelect(data);	
-	if(SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
+	if (db_fmt_escape(data, data->SQL_SELECT,data->SQL_SELECT_SIZE,
 			 "SELECT MAX(cid) FROM %s WHERE sid='%u';",
 			 table_array[itr],
-			 data->sid))
+			 data->sid) < 0)
 	{
 	    LogMessage("database: [%s()], was unable to build query \n",
 		       __FUNCTION__);
@@ -593,9 +602,6 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
 {
 
     u_int32_t retval = 0;
-    char * escapedSensorName = NULL;
-    char * escapedInterfaceName = NULL;
-    char * escapedBPFFilter = NULL;
     
     if(data == NULL)
     {
@@ -616,37 +622,32 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
         }
     }
     
-    escapedSensorName    = snort_escape_string(data->sensor_name, data);
-    escapedInterfaceName = snort_escape_string(PRINT_INTERFACE(barnyard2_conf->interface), data);
-    
     
     if( data->ignore_bpf == 0 )
     {
         if(barnyard2_conf->bpf_filter == NULL)
         {
-	    DatabaseCleanInsert(data);
-	    if( (SnortSnprintf(data->SQL_INSERT, data->SQL_INSERT_SIZE,
-			       "INSERT INTO sensor (hostname, interface, detail, encoding, last_cid) "
-			       "VALUES ('%s','%s',%u,%u, 0);",
-			       escapedSensorName, escapedInterfaceName,
-			       data->detail, data->encoding)) != SNORT_SNPRINTF_SUCCESS)
+			if (db_fmt_escape(data, data->SQL_INSERT, data->SQL_INSERT_SIZE,
+						"INSERT INTO sensor (hostname, interface, detail, encoding, last_cid) "
+						"VALUES ('%s','%s',%u,%u, 0);",
+						data->sensor_name, PRINT_INTERFACE(barnyard2_conf->interface),
+						data->detail, data->encoding) < 0)
 	    {
 		/* XXX */
 		retval = 1;
 		goto exit_funct;
 	    }
 	    
-	    DatabaseCleanSelect(data);
-            if( (SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
-			       "SELECT sid "
-			       "  FROM sensor "
-			       " WHERE hostname = '%s' "
-			       "   AND interface = '%s' "
-			       "   AND detail = %u "
-			       "   AND encoding = %u "
-			       "   AND filter IS NULL",
-			       escapedSensorName, escapedInterfaceName,
-			       data->detail, data->encoding)) != SNORT_SNPRINTF_SUCCESS)
+			if (db_fmt_escape(data, data->SQL_SELECT,data->SQL_SELECT_SIZE,
+						"SELECT sid "
+						"  FROM sensor "
+						" WHERE hostname = '%s' "
+						"   AND interface = '%s' "
+						"   AND detail = %u "
+						"   AND encoding = %u "
+						"   AND filter IS NULL",
+						data->sensor_name, PRINT_INTERFACE(barnyard2_conf->interface),
+						data->detail, data->encoding) < 0)
 	    {
 		/* XXX */
                 retval = 1;
@@ -655,30 +656,27 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
         }
         else
         {
-            escapedBPFFilter = snort_escape_string(barnyard2_conf->bpf_filter, data);
 	    
-	    DatabaseCleanInsert(data);
-            if( (SnortSnprintf(data->SQL_INSERT, data->SQL_INSERT_SIZE,
-			       "INSERT INTO sensor (hostname, interface, filter, detail, encoding, last_cid) "
-			       "VALUES ('%s','%s','%s',%u,%u, 0);",
-			       escapedSensorName, escapedInterfaceName,
-			       escapedBPFFilter, data->detail, data->encoding)) != SNORT_SNPRINTF_SUCCESS)
+			if (db_fmt_escape(data, data->SQL_INSERT, data->SQL_INSERT_SIZE,
+						"INSERT INTO sensor (hostname, interface, filter, detail, encoding, last_cid) "
+						"VALUES ('%s','%s','%s',%u,%u, 0);",
+						data->sensor_name, PRINT_INTERFACE(barnyard2_conf->interface),
+						barnyard2_conf->bpf_filter, data->detail, data->encoding) < 0)
 	    {
                 retval = 1;
                 goto exit_funct;
 	    }
 	    
-	    DatabaseCleanSelect(data);
-            if( (SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
-			       "SELECT sid "
-			       "  FROM sensor "
-			       " WHERE hostname = '%s' "
-			       "   AND interface = '%s' "
-			       "   AND filter ='%s' "
-			       "   AND detail = %u "
-			       "   AND encoding = %u ",
-			       escapedSensorName, escapedInterfaceName,
-			       escapedBPFFilter, data->detail, data->encoding)) != SNORT_SNPRINTF_SUCCESS)
+			if (db_fmt_escape(data, data->SQL_SELECT,data->SQL_SELECT_SIZE,
+						"SELECT sid "
+						"  FROM sensor "
+						" WHERE hostname = '%s' "
+						"   AND interface = '%s' "
+						"   AND filter ='%s' "
+						"   AND detail = %u "
+						"   AND encoding = %u ",
+						data->sensor_name, PRINT_INTERFACE(barnyard2_conf->interface),
+						barnyard2_conf->bpf_filter, data->detail, data->encoding) < 0)
 	    {
 		/* XXX */
                 retval = 1;
@@ -690,29 +688,26 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
     {
 	if(barnyard2_conf->bpf_filter == NULL)
 	{
-	    DatabaseCleanInsert(data);
-	    if( (SnortSnprintf(data->SQL_INSERT, data->SQL_INSERT_SIZE,
-			       "INSERT INTO sensor (hostname, interface, detail, encoding, last_cid) "
-			       "VALUES ('%s','%s',%u,%u, 0);",
-			       escapedSensorName, escapedInterfaceName,
-			       data->detail, data->encoding)) != SNORT_SNPRINTF_SUCCESS)
+		if (db_fmt_escape(data, data->SQL_INSERT, data->SQL_INSERT_SIZE,
+					"INSERT INTO sensor (hostname, interface, detail, encoding, last_cid) "
+					"VALUES ('%s','%s',%u,%u, 0);",
+					data->sensor_name, PRINT_INTERFACE(barnyard2_conf->interface),
+					data->detail, data->encoding) < 0)
 	    {
 		/* XXX */
                 retval = 1;
                 goto exit_funct;
 	    }
 	    
-            DatabaseCleanSelect(data);
-            if( (SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
-			       "SELECT sid "
-			       "  FROM sensor "
-			       " WHERE hostname = '%s' "
-
-			       "   AND interface = '%s' "
-			       "   AND detail = %u "
-			       "   AND encoding = %u",
-			       escapedSensorName, escapedInterfaceName,
-			       data->detail, data->encoding)) != SNORT_SNPRINTF_SUCCESS)
+		if (db_fmt_escape(data, data->SQL_SELECT,data->SQL_SELECT_SIZE,
+					"SELECT sid "
+					"  FROM sensor "
+					" WHERE hostname = '%s' "
+					"   AND interface = '%s' "
+					"   AND detail = %u "
+					"   AND encoding = %u",
+					data->sensor_name, PRINT_INTERFACE(barnyard2_conf->interface),
+					data->detail, data->encoding) < 0)
 	    {
 		/* XXX */
                 retval = 1;
@@ -721,30 +716,27 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
 	}
 	else
 	{
-	    escapedBPFFilter = snort_escape_string(barnyard2_conf->bpf_filter, data);
 	    
-	    DatabaseCleanInsert(data);
-            if( (SnortSnprintf(data->SQL_INSERT, data->SQL_INSERT_SIZE,
-			       "INSERT INTO sensor (hostname, interface, filter, detail, encoding, last_cid) "
-			       "VALUES ('%s','%s','%s',%u,%u, 0);",
-			       escapedSensorName, escapedInterfaceName,
-			       escapedBPFFilter, data->detail, data->encoding)) != SNORT_SNPRINTF_SUCCESS)
+		if (db_fmt_escape(data, data->SQL_INSERT, data->SQL_INSERT_SIZE,
+					"INSERT INTO sensor (hostname, interface, filter, detail, encoding, last_cid) "
+					"VALUES ('%s','%s','%s',%u,%u, 0);",
+					data->sensor_name, PRINT_INTERFACE(barnyard2_conf->interface),
+					barnyard2_conf->bpf_filter, data->detail, data->encoding) < 0)
 	    {
 		/* XXX */
                 retval = 1;
                 goto exit_funct;
 	    }
 	    
-	    DatabaseCleanSelect(data);
-	    if( (SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
-			       "SELECT sid "
-			       "  FROM sensor "
-			       " WHERE hostname = '%s' "
-			       "   AND interface = '%s' "
-			       "   AND detail = %u "
-			       "   AND encoding = %u",
-			       escapedSensorName, escapedInterfaceName,
-			       data->detail, data->encoding)) != SNORT_SNPRINTF_SUCCESS)
+		if (db_fmt_escape(data,data->SQL_SELECT,data->SQL_SELECT_SIZE,
+					"SELECT sid "
+					"  FROM sensor "
+					" WHERE hostname = '%s' "
+					"   AND interface = '%s' "
+					"   AND detail = %u "
+					"   AND encoding = %u",
+					data->sensor_name, PRINT_INTERFACE(barnyard2_conf->interface),
+					data->detail, data->encoding) < 0)
 	    {
 		/* XXX */
                 retval = 1;
@@ -805,23 +797,6 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
 
     
 exit_funct:
-    if(escapedSensorName != NULL)
-    {
-	free(escapedSensorName);
-	escapedSensorName= NULL;
-    }
-    if(escapedInterfaceName != NULL)
-    {
-	free(escapedInterfaceName);
-	escapedInterfaceName = NULL;
-    }
-    
-    if( escapedBPFFilter != NULL)
-    {
-	free(escapedBPFFilter);
-	escapedBPFFilter = NULL;
-    }
-    
     return retval;
 
 
@@ -1764,25 +1739,17 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 			    
 			}
 			
-			//packet_data = snort_escape_string(packet_data_not_escaped, data);
-			if( snort_escape_string_STATIC(data->PacketDataNotEscaped,strlen(data->PacketDataNotEscaped)+1,data))
-			{
-			    /* XXX */
-			    goto bad_query;
-			}
-			
 			
 			switch(data->dbtype_id)
 			{
 			default:
-			    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-					       "INSERT INTO "
-					       "data (sid,cid,data_payload) "
-					       "VALUES (%u,%u,'%s');",
-					       data->sid,
-					       data->cid,
-					       //packet_data))  != SNORT_SNPRINTF_SUCCESS)
-					       data->sanitize_buffer)) != SNORT_SNPRINTF_SUCCESS)
+				if (db_fmt_escape(data, SQLQueryPtr, MAX_QUERY_LENGTH,
+							"INSERT INTO "
+							"data (sid,cid,data_payload) "
+							"VALUES (%u,%u,'%s');",
+							data->sid,
+							data->cid,
+					       data->PacketDataNotEscaped) < 0)
 			    {
 				goto bad_query;
 			    }
@@ -2006,303 +1973,111 @@ bad_query:
 }
 
 
-
-/* Some of the code in this function is from the
-   mysql_real_escape_string() function distributed with mysql.
-
-   Those portions of this function remain
-   Copyright (C) 2000 MySQL AB & MySQL Finland AB & TCX DataKonsult AB
-
-   We needed a more general case that was not MySQL specific so there
-   were small modifications made to the mysql_real_escape_string()
-   function. */
-
-char * snort_escape_string(char * from, DatabaseData * data)
-{
-    char * to;
-    char * to_start;
-    char * end;
-    int from_length;
-
-    from_length = (int)strlen(from);
-
-    to = (char *)SnortAlloc(strlen(from) * 2 + 1);
-    to_start = to;
-/* Historically these were together in a common "else".
- * Keeping it that way until somebody complains...
- */
-#if defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)
-    if (data->dbtype_id == DB_MYSQL ||
-        data->dbtype_id == DB_POSTGRESQL)
-    {
-      for(end=from+from_length; from != end; from++)
-      {
-        switch(*from)
-        {
-          /*
-           * Only need to escape '%' and '_' characters
-           * when querying a SELECT...LIKE, which never
-           * occurs in Snort.  Excluding these checks
-           * for that reason.
-          case '%':            ** %  -->  \% **
-            *to++= '\\';
-            *to++= '%';
-            break;
-          case '_':            ** _  -->  \_ **
-            *to++= '\\';
-            *to++= '_';
-            break;
-           */
-
-	case 0:              /* NULL  -->  \\0  (probably never encountered due to strlen() above) */
-	    *to++= '\\';       /* Must be escaped for 'mysql' */
-            *to++= '0';
-            break;
-	case '\n':           /* \n  -->  \\n */
-            *to++= '\\';       /* Must be escaped for logs */
-            *to++= 'n';
-            break;
-	case '\r':           /* \r  -->  \\r */
-            *to++= '\\';
-            *to++= 'r';
-            break;
-	case '\t':           /* \t  -->  \\t */
-	    *to++= '\\';
-            *to++= 't';
-            break;
-	case '\\':           /* \  -->  \\ */
-	    *to++= '\\';
-            *to++= '\\';
-            break;
-	case '\'':           /* '  -->  \' */
-	    *to++= '\\';
-	    *to++= '\'';
-            break;
-	case '"':            /* "  -->  \" */
-            *to++= '\\';       /* Better safe than sorry */
-            *to++= '"';
-            break;
-	case '\032':         /* Ctrl-Z (Win32 EOF)  -->  \\Z */
-            if (data->dbtype_id == DB_MYSQL)
-            {
-		*to++= '\\';       /* This gives problems on Win32 */
-		*to++= 'Z';
-            }
-            else
-            {
-		*to++= *from;
-            }
-            break;
-	default:             /* copy character directly */
-            *to++= *from;
-        }
-      }
-    }
-    else
+static size_t db_escape_string(DatabaseData * dbh, char * buf, size_t buf_size, char * str) {
+    switch(dbh->dbtype_id) {
+#ifdef ENABLE_MYSQL:
+	case DB_MYSQL:
+		return db_escape_string_mysql(dbh, buf, buf_size, str);
 #endif
-    {
-	for (end=from+from_length; from != end; from++)
-	{
-	    switch(*from)
-	    {
-	    case '\'':           /*  '  -->  '' */
-            *to++= '\'';
-            *to++= '\'';
-            break;
-	    default:             /* copy character directly */
-		*to++= *from;
-	    }
-	}
-    }
-    *to=0;
-    return(char *)to_start;
-}
-
-/* 
-  Same function as above but will work on a static buffer, slightly different arguments...
-*/
-u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,DatabaseData *data)
-{
-
-
-
-#if defined(ENABLE_POSTGRESQL)   
-    int error = 0;
-    size_t write_len = 0;
-#endif /* defined(ENABLE_POSRGRESQL) */
-
-    char * to = NULL;
-    char * to_start = NULL;
-    char * end = NULL;
-    char * from_start = NULL;
-    int from_length = 0;
-    
-    if( (from == NULL) ||
-	(data == NULL))
-    {
-	/* XXX */
-	return 1;
-    }
-    
-    if( (buffer_max_len > (DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN - 1)) ||
-	( (strlen(from) + 1 ) > buffer_max_len) ||
-	(buffer_max_len == 0))
-    {
-	/* XXX */
-	FatalError("database [%s()]: Edit source code and change the value of the #define  DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN in spo_database.h to something greater than [%u] \n",
-		   __FUNCTION__,
-		   buffer_max_len);
-    }
-    
-    memset(data->sanitize_buffer,'\0',DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN);
-    
-    if( (from_length = strlen(from)) == 1)
-    {
-	/* Nothing to escape */
-	return 0;
-    }
-    
-    from_start = from;    
-    to = data->sanitize_buffer;
-    to_start = to;
-    
-    switch(data->dbtype_id)
-    {
-
-/* Historically these were together in a common "else".
- * Keeping it that way until somebody complains...
- */
-
-#if  defined( ENABLE_MYSQL )
-//#ifdef ENABLE_MYSQL
-    case DB_MYSQL:
-	for(end=from+from_length; from != end; from++)
-	{
-	    switch(*from)
-	    {
-		/*
-		 * Only need to escape '%' and '_' characters
-		 * when querying a SELECT...LIKE, which never
-		 * occurs in Snort.  Excluding these checks
-		 * for that reason.
-		 */
-		/*
-		  case '%':            * %  -->  \% *
-		  *to++= '\\';
-		  *to++= '%';
-		  break;
-		  case '_':            * _  -->  \_  *
-		  *to++= '\\';
-		  *to++= '_';
-		  break;
-		*/
-		
-	    case 0:              /* NULL  -->  \\0  (probably never encountered due to strlen() above) */
-		*to++= '\\';       /* Must be escaped for 'mysql' */
-		*to++= '0';
-		break;
-	    case '\n':           /* \n  -->  \\n */
-		*to++= '\\';       /* Must be escaped for logs */
-		*to++= 'n';
-		break;
-	    case '\r':           /* \r  -->  \\r */
-		*to++= '\\';
-		*to++= 'r';
-		break;
-	    case '\t':           /* \t  -->  \\t */
-		*to++= '\\';
-		*to++= 't';
-		break;
-	    case '\\':           /* \  -->  \\ */
-		*to++= '\\';
-		*to++= '\\';
-		break;
-	    case '/':
-		*to++= '\\';      /* / --> \/ */
-		*to++= '/';
-		break;
-	    case '\'':           /* '  -->  \' */
-		*to++= '\\';
-		*to++= '\'';
-		break;
-	    case '"':            /* "  -->  \" */
-		*to++= '\\';       /* Better safe than sorry */
-		*to++= '"';
-		break;
-	    case '\032':         /* Ctrl-Z (Win32 EOF)  -->  \\Z */
-		if (data->dbtype_id == DB_MYSQL)
-		{
-		    *to++= '\\';       /* This gives problems on Win32 */
-		    *to++= 'Z';
-		}
-		else
-		{
-		    *to++= *from;
-		}
-		break;
-	    default:             /* copy character directly */
-		*to++= *from;
-	    }
-	}
-    	break;
-#endif /* defined( ENABLE_MYSQL ) */
-	
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
-	
-	if( (write_len = PQescapeStringConn(data->p_connection,
-					    data->sanitize_buffer,
-					    from,
-					    buffer_max_len,&error)) == 0)
-	{
-	    /* XXX */
-	    return 1;
-	}
-	
-	if(error != 1)
-	{
-	    memcpy(from_start,data->sanitize_buffer,write_len+1);
-	}
-	else
-	{
-	    /* XXX */
-	    return 1;
-	}
-	
-	return 0;
-	break;
+		return db_escape_string_postgresql(dbh, buf, buf_size, str);
 #endif /* ENABLE_POSTGRESQL*/	
-    default:
-	for (end=from+from_length; from != end; from++)
-	{
-	    switch(*from)
-	    {
-	    case '\'':           /*  '  -->  '' */
-		*to++= '\'';
-		*to++= '\'';
-		break;
-	    case '\\':           /* \  -->  \\ */
-                *to++= '\\';
-                *to++= '\\';
-                break;
-	    default:             /* copy character directly */
-		*to++= *from;
-	    }
+	default:
+		FatalError("Invalid DB type ID.\n");
+		return buf_size+1;
 	}
-	break;
-    }
-    
-    *to='\0';
- 
-    if(strlen(to_start) > buffer_max_len)
-    {
-	/* XXX */
-	return 1;
-    }
-    
+}
 
-    memcpy(from_start,to_start,strlen(to_start));
-    return 0;
+#ifdef ENABLE_MYSQL
+/**
+ * returns the number of bytes that will be written if buf_size is sufficiently
+ * large.
+ */
+static size_t db_escape_string_mysql(DatabaseData * db, char * buf, size_t buf_size, char * str) {
+	size_t len = strlen(str);
+
+	//nasty hack.
+	if (2*len > buf_size) {
+		return 2*len;
+	}
+
+	return (size_t)mysql_real_escape_string(db->m_sock, buf, str, len);
+}
+#endif
+
+#ifdef ENABLE_POSTGRESQL
+static size_t db_escape_string_postgresql(DatabaseData * db, char * buf, size_t buf_size, char * str) {
+	size_t len = strlen(str);
+
+	//nasthy hack
+	if (2*len > buf_size) {
+		return 2*len;
+	}
+
+	//note: this will add a NULL byte, but not include the null byte in the
+	//length given by the return value.
+	return PQescapeStringConn(db->p_connection, buf, str, len, NULL);
+}
+#endif
+
+/**
+ *
+ * @return 0 on success; -1 on overflow; -2 on unknown format specifier.
+ */
+int db_fmt_escape(DatabaseData * db, char * buf, size_t buf_size, char * fmt, ...) {
+	va_list ap;
+	int ret = 0;
+
+	//allow space for terminating nul byte.
+	size_t usable_size = buf_size - 1;
+
+	//worst case: ensure buf is null terminated;
+	buf[usable_size] = '\0';
+	int is_fmt = 0;
+
+	va_start(ap, fmt);
+
+	size_t widx,ridx;
+	for (ridx = 0, widx = 0; widx < usable_size && fmt[ridx] != '\0'; ++ridx) {
+		if (is_fmt == 0) {
+			if (fmt[ridx] == '%')
+				is_fmt = 1;
+			else
+				buf[widx++] = fmt[ridx];
+		} else if (is_fmt == 1) {
+			is_fmt = 0;
+			size_t available_space = usable_size - widx;
+			size_t bytes = 0;
+
+			if (fmt[ridx] == '%') {
+				buf[widx] = '%';
+				bytes = 1;
+			} else if (fmt[ridx] == 'u') {
+				bytes = snprintf(&buf[widx], available_space, "%"PRIu32, va_arg(ap,uint32_t));
+			} else if (fmt[ridx] == 's') {
+				bytes = db_escape_string(db, &buf[widx], available_space, va_arg(ap,char*));
+			} else {
+				//unknown format specifier.
+				ret = -2;
+				goto end;
+			}
+
+			if (bytes > available_space) {
+				ret = -1;
+				widx = usable_size;
+				goto end;
+			} else {
+				widx += bytes;
+			}
+		}
+	}
+
+end:
+	va_end(ap);
+	buf[widx] = '\0';
+
+	return ret;
 }
 
 
@@ -2384,12 +2159,10 @@ int GetLastCid(DatabaseData *data, int sid,u_int32_t *r_cid)
     }
     
     
-    DatabaseCleanSelect(data);
-    
-    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                        "SELECT last_cid "
-                        "  FROM sensor "
-		       " WHERE sid = %u", sid)) != SNORT_SNPRINTF_SUCCESS)
+	if (db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH,
+				"SELECT last_cid "
+				"  FROM sensor "
+				" WHERE sid = %u", sid) < 0)
     {
 	*r_cid = 0;
         return 1;
@@ -2426,32 +2199,28 @@ int CheckDBVersion(DatabaseData * data)
 	return 1;
     }
 
-   DatabaseCleanSelect(data);
-
-   {
 #if defined(ENABLE_MYSQL)
       if (data->dbtype_id == DB_MYSQL)
       {
 	  /* "schema" is a keyword in MYSQL, so use `schema`
 	   *  to indicate that we are referring to the table
           */
-	  
-	  if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                             "SELECT vseq FROM `schema`")) != SNORT_SNPRINTF_SUCCESS)
+		int res = db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH,"SELECT vseq FROM `schema`");
+		  if (res < 0) 
 	  {
+		  LogMessage("FAIL: %d\n",res);
 	      return 1;
 	  }
       }
       else
 #endif
       {
-	  if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                             "SELECT vseq FROM schema")) != SNORT_SNPRINTF_SUCCESS)
+		  if (db_fmt_escape(data, data->SQL_SELECT, MAX_QUERY_LENGTH,
+					  "SELECT vseq FROM schema") < 0)
 	  {
 	      return 1;
 	  }
       }
-   }
    
    if( Select(data->SQL_SELECT,data,(u_int32_t *)&data->DBschema_version))
    {
