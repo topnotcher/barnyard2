@@ -3,12 +3,7 @@ I. Summary
 The database output plug-in enables snort to log to
 
   - Postgresql,
-  - MySQL,
-
-# Currently unsupported.
-#  - any unixODBC database,
-#  - MS SQL Server and
-#  - Oracle.
+  - MySQL
 
 This README contains some quick information about how to set up and
 configure database logging with in snort.  More complete and
@@ -32,15 +27,9 @@ To get this plug-in working you must have a database set up and
 configured properly. Take the the following steps to get things
 working.
 
-   1) Install MySQL, Postgresql, Oracle, MS SQL Server or
-      (unixODBC + some other RDBMS)
+   1) Install MySQL, Postgresql:
         MySQL      => http://www.mysql.org
         Postgresql => http://www.postgesql.org
-
-# Currently Unsupported
-# unixODBC   => http://www.unixodbc.org
-# Oracle     => http://www.oracle.com
-# SQL Server => http://www.microsoft.com
 
    2) Follow directions from your database vendor to be sure your
       RDBMS is properly configured and secured.
@@ -74,31 +63,6 @@ working.
       For Postgresql
       % psql snort < ./schemas/create_postgresql
 
-      For Oracle
-      The file "./schemas/create_oracle.sql" contains the database
-      structure.
-
-      For MS SQL Server
-      The file "./schemas/create_mssql" contains the database
-      structure.
-
-      If you are using unixODBC, be sure to properly configure and
-      test that you can connect to your data source (DSN) with isql
-      before trying to run snort.
-
-      For RDBMS other than MySQL and Postgresql that are accessed
-      through ODBC you will need to create the database
-      structure yourself because data types vary for different
-      databases. You will need to have the same column names and
-      functionality for each column as in the mysql and
-      postgresql examples. The mysql file is the best example to
-      follow since it is optimized (given that mysql supports tiny
-      ints and unsigned ints). I intend to document this process
-      better in the future to make this process easier.
-
-      As you create database structure files for new RDBMS mail
-      them in so they can be included as part of the distribution.
-
 III. Plugin Configuration
 
 You must add some information to the snort configuration file
@@ -116,7 +80,7 @@ Arguments:
        likely want to use the log facility.
 
    [type of database] - You must supply the type of database. The
-       possible values are mysql, postgresql, odbc, mssql, and oracle.
+       possible values are mysql, postgresql.
 
    [parameter list] - The parameter list consists of key value
        pairs. The proper format is a list of key=value pairs each

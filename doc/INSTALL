@@ -43,18 +43,9 @@ are below. Detailed instructions will follow later.
 `--with-mysql-includes=DIR'
     Specify location for mysql header files.
 
-`--with-odbc=DIR'
-    Support for ODBC databases, turn this on if you want to use ACID/BASE with
-    a non-listed DB.
-
 `--with-postgresql=DIR'
     Support for Postgresql databases, turn this on if you want to use ACID/BASE
     with PostgreSQL.
-
-`--with-oracle=DIR'
-    Support for Oracle databases, turn this on if you want to use ACID/BASE
-    with Oracle.
-
 
 -------------------------------------------------------------------------------
 2. BASIC INSTALLATION

@@ -84,38 +84,6 @@
 #define NUM_ROW_CLASSIFICATION 2
 #define NUM_ROW_SIGNATURE 7
 
-/*
-#if defined(ENABLE_POSTGRESQL)
-
-** Note : ELZ
-**
-** Initially i tought that using E'' would escape some issue. 
-** It turns out it would also create other issue like automatically
-** encode special sequence and its not a good thing since in initial testing non of the signature has such char, but it turned out
-** some had and it would wreck logical havock, so to prevent bugs Queries have been keept commented but the code has been reverted to normal behavior.
-** Ref: http://www.postgresql.org/docs/9.1/static/datatype-binary.html
-
-#define PGSQL_SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM "INSERT INTO reference_system (ref_system_name) VALUES (E'%s');"
-#define PGSQL_SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM "SELECT ref_system_id FROM reference_system WHERE ref_system_name = E'%s';"
-#define PGSQL_SQL_INSERT_SPECIFIC_REF  "INSERT INTO reference (ref_system_id,ref_tag) VALUES ('%u',E'%s');"
-#define PGSQL_SQL_SELECT_SPECIFIC_REF  "SELECT ref_id FROM reference WHERE ref_system_id = '%u' AND ref_tag = E'%s';"
-#define PGSQL_SQL_INSERT_CLASSIFICATION "INSERT INTO sig_class (sig_class_name) VALUES (E'%s');"
-#define PGSQL_SQL_SELECT_SPECIFIC_CLASSIFICATION "SELECT sig_class_id FROM sig_class WHERE sig_class_name = E'%s';"
-#define PGSQL_SQL_INSERT_SIGNATURE "INSERT INTO signature (sig_sid, sig_gid, sig_rev, sig_class_id, sig_priority, sig_name) VALUES ('%u','%u','%u','%u','%u',E'%s');"
-#define PGSQL_SQL_SELECT_SPECIFIC_SIGNATURE "SELECT sig_id FROM signature WHERE " \
-    "(sig_sid  = '%u') AND "						\
-    "(sig_gid  = '%u') AND "						\
-    "(sig_rev  = '%u') AND "						\
-    "(sig_class_id = '%u') AND "					\
-    "(sig_priority = '%u') AND "					\
-    "(sig_name = E'%s'); "						\
-#endif 
-*/  
-
-//#if defined(ENABLE_MYSQL) || defined (ENABLE_ODBC) || defined (ENABLE_ORACLE) || defined (ENABLE_MSSQL)    
-//#endif
-
-
 #define SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM "INSERT INTO reference_system (ref_system_name,ref_system_url) VALUES ('%s','%s');"
 #define SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM "SELECT ref_system_id FROM reference_system WHERE ref_system_name = '%s' AND ref_system_url='%s';"
 #define SQL_INSERT_SPECIFIC_REF  "INSERT INTO reference (ref_system_id,ref_tag) VALUES ('%u','%s');"

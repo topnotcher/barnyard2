@@ -76,31 +76,6 @@
 # include <errmsg.h>
 #endif
 
-#ifdef ENABLE_ODBC
-# include <sql.h>
-# include <sqlext.h>
-# include <sqltypes.h>
-  /* The SQL Server libraries, for some reason I can't
-   * understand, define their own constants for SQLRETURN
-   * and SQLCHAR.  But, in SQL Server, these are numeric
-   * values, not datatypes.  So we define datatypes here
-   * with a non-conflicting name.
-   */
-typedef SQLRETURN ODBC_SQLRETURN;
-typedef SQLCHAR   ODBC_SQLCHAR;
-#endif
-
-#ifdef ENABLE_ORACLE
-# include <oci.h>
-#endif
-
-#ifdef ENABLE_MSSQL
-# define DBNTWIN32
-# include <windows.h>
-# include <sqlfront.h>
-# include <sqldb.h>
-#endif
-
 #include "map.h"
 #include "plugbase.h"
 
@@ -121,10 +96,7 @@ enum db_types_en
     DB_UNDEFINED  = 0,
     DB_MYSQL      = 1,
     DB_POSTGRESQL = 2,
-    DB_MSSQL      = 3,
-    DB_ORACLE     = 4,
-    DB_ODBC       = 5,
-    DB_ENUM_MAX_VAL = DB_ODBC+1 /* This value has to be updated if a new dbms is inserted in the enum 
+    DB_ENUM_MAX_VAL = 3 /* This value has to be updated if a new dbms is inserted in the enum 
 			         This is used for different function pointers used by the module depending on operation mode
 			      */
 };
@@ -351,16 +323,6 @@ typedef struct _dbReliabilityHandle
     char     *ssl_mode;
     /* Herited from shared data globals */
 #endif
-
-#ifdef ENABLE_ODBC
-#endif
-
-#ifdef ENABLE_ORACLE
-#endif
-    
-#ifdef ENABLE_MSSQL
-#endif
-    
     /* Set by dbms specific setup function */
     u_int32_t (*dbConnectionStatus)(struct _dbReliabilityHandle *);
 } dbReliabilityHandle;
@@ -419,29 +381,6 @@ typedef struct _DatabaseData
     MYSQL_RES * m_result;
     MYSQL_ROW m_row;
 #endif
-#ifdef ENABLE_ODBC
-    SQLHENV u_handle;
-    SQLHDBC u_connection;
-    SQLHSTMT u_statement;
-    SQLINTEGER  u_col;
-    SQLINTEGER  u_rows;
-    dbtype_t    u_underlying_dbtype_id;
-#endif
-#ifdef ENABLE_ORACLE
-    OCIEnv *o_environment;
-    OCISvcCtx *o_servicecontext;
-    OCIBind *o_bind;
-    OCIError *o_error;
-    OCIStmt *o_statement;
-    OCIDefine *o_define;
-    text o_errormsg[512];
-    sb4 o_errorcode;
-#endif
-#ifdef ENABLE_MSSQL
-    PDBPROCESS  ms_dbproc;
-    PLOGINREC   ms_login;
-    DBINT       ms_col;
-#endif
     char *args;
     
 /*  Databse Reliability  */ 
@@ -459,9 +398,6 @@ typedef struct _DatabaseData
 /******** Constants  ***************************************************/
 #define KEYWORD_POSTGRESQL   "postgresql"
 #define KEYWORD_MYSQL        "mysql"
-#define KEYWORD_ODBC         "odbc"
-#define KEYWORD_ORACLE       "oracle"
-#define KEYWORD_MSSQL        "mssql"
 
 #define KEYWORD_HOST         "host"
 #define KEYWORD_PORT         "port"
@@ -510,36 +446,6 @@ typedef struct _DatabaseData
 
 
 void DatabaseSetup(void);
-
-
-
-
-/* The following is for supporting Microsoft SQL Server */
-#ifdef ENABLE_MSSQL
-
-/* If you want extra debugging information (specific to
-   Microsoft SQL Server), uncomment the following line. */
-#define ENABLE_MSSQL_DEBUG
-
-#if defined(DEBUG) || defined(ENABLE_MSSQL_DEBUG)
-    /* this is for debugging purposes only */
-    static char g_CurrentStatement[2048];
-    #define SAVESTATEMENT(str)   strncpy(g_CurrentStatement, str, sizeof(g_CurrentStatement) - 1);
-    #define CLEARSTATEMENT()     memset((char *) g_CurrentStatement, 0, sizeof(g_CurrentStatement));
-#else
-    #define SAVESTATEMENT(str)   NULL;
-    #define CLEARSTATEMENT()     NULL;
-#endif /* DEBUG || ENABLE_MSSQL_DEBUG*/
-
-    /* Prototype of SQL Server callback functions.
-     * See actual declaration elsewhere for details.
-     */
-    static int mssql_err_handler(PDBPROCESS dbproc, int severity, int dberr,
-                                 int oserr, LPCSTR dberrstr, LPCSTR oserrstr);
-    static int mssql_msg_handler(PDBPROCESS dbproc, DBINT msgno, int msgstate,
-                                 int severity, LPCSTR msgtext, LPCSTR srvname, LPCSTR procname,
-                                 DBUSMALLINT line);
-#endif /* ENABLE_MSSQL */
 
 
 /******** Prototypes  **************************************************/
@@ -596,11 +502,6 @@ u_int32_t SignatureLookup(DatabaseData * data, dbSignatureObj * lookup);
 void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag);
 
 u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH);
-u_int32_t dbConnectionStatusODBC(dbReliabilityHandle *pdbRH);
 u_int32_t dbConnectionStatusMYSQL(dbReliabilityHandle *pdbRH);
 
-
-#ifdef ENABLE_ODBC
-void ODBCPrintError(DatabaseData *data,SQLSMALLINT iSTMT_type);
-#endif
 #endif  /* __SPO_DATABASE_H__ */

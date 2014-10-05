@@ -10,17 +10,11 @@
 #       --with postgresql
 #               Builds a binary/package with support for PostgreSQL.
 #
-#       --with oracle
-#               Builds a binary/package with support for Oracle.
-#
 #       --with libpcap1
 #               Uses Vincent Cojot's libpcap1-devel rpm instead of libpcap-devel
 #
 # See pg 399 of _Red_Hat_RPM_Guide_ for rpmbuild --with and --without options.
 ################################################################
-
-# Other useful bits
-%define OracleHome /opt/oracle/OraHome1
 
 # Default of no MySQL, but --with mysql will enable it
 %define mysql 0
@@ -29,10 +23,6 @@
 # Default of no PostgreSQL, but --with postgresql will enable it
 %define postgresql 0
 %{?_with_postgresql:%define postgresql 1}
-
-# Default of no Oracle, but --with oracle will enable it
-%define oracle 0
-%{?_with_oracle:%define oracle 1}
 
 # Build with libpcap1 from Vincent Cojot's snort packages
 # Default to standard libpcap, but --with libpcap1 will enable libpcap1
@@ -92,16 +82,6 @@ BuildRequires: postgresql-devel
 %description postgresql
 barnyard2 binary compiled with postgresql support.
 
-%package oracle
-Summary: barnyard2 with Oracle support
-Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
-%description oracle
-barnyard2 binary compiled with Oracle support.
-
-EXPERIMENTAL!!  I don't have a way to test this, so let me know if it works!
-ORACLE_HOME=%{OracleHome}
-
 %prep
 %setup -q
 
@@ -115,9 +95,6 @@ ORACLE_HOME=%{OracleHome}
    %endif
    %if %{postgresql}
       --with-postgresql \
-   %endif
-   %if %{oracle}
-      --with-oracle \
    %endif
    %if %{mysql}
       --with-mysql-libraries=/usr/%{_lib} \
