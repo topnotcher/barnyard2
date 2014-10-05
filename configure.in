@@ -512,6 +512,14 @@ if test "x$enable_debug" = "xyes"; then
     if echo $CFLAGS | grep -qve -g ; then
         CFLAGS="$CFLAGS -g"
     fi
+
+	CFLAGS="$CFLAGS -Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter \
+		-Wno-missing-braces -Wno-missing-field-initializers -Wformat=2 \
+		-Wswitch-default -Wswitch-enum -Wcast-align -Wpointer-arith -Wbad-function-cast \
+		-Wstrict-overflow=5 -Wstrict-prototypes -Winline -Wundef -Wlogical-op -Wfloat-equal \
+		-Wstrict-aliasing=1 -Wredundant-decls -Wold-style-definition -Wundef -Wnested-externs \
+		-Wshadow -Wunreachable-code -Wcast-qual -Wmissing-prototypes"
+		#-pedantic
 fi
 
 AC_ARG_WITH(mysql, 
