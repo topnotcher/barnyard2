@@ -440,7 +440,7 @@ typedef struct _DatabaseData
 #   define KEYWORD_SSL_MODE_REQUIRE "require"
 #endif
 
-#define LATEST_DB_SCHEMA_VERSION 107
+#define LATEST_DB_SCHEMA_VERSION 108
 
 
 
