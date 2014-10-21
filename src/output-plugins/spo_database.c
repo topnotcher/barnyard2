@@ -182,18 +182,12 @@ u_int32_t SQL_Finalize(DatabaseData *data)
 
     for(x = 0 ; x < data->SQL.query_total ; x++)
     {
-	if(data->SQL.query_array[x] != NULL)
-	{
-	    free(data->SQL.query_array[x]);
-	    data->SQL.query_array[x]= NULL;
-	}
+		free(data->SQL.query_array[x]);
+		data->SQL.query_array[x]= NULL;
     }
     
-    if( data->SQL.query_array != NULL)
-    {
 	free(data->SQL.query_array);
 	data->SQL.query_array = NULL;
-    }
     
     return 0;
 }
@@ -2994,17 +2988,11 @@ void SpoDatabaseCleanExitFunction(int signal, void *arg)
 	
 	Disconnect(data);
 
-	if(data->SQL_INSERT != NULL)
-	{
-	    free(data->SQL_INSERT);
-	    data->SQL_INSERT = NULL;
-	}
+	free(data->SQL_INSERT);
+	data->SQL_INSERT = NULL;
 	
-	if(data->SQL_SELECT != NULL)
-	{
-	    free(data->SQL_SELECT);
-	    data->SQL_SELECT = NULL;
-	}
+	free(data->SQL_SELECT);
+	data->SQL_SELECT = NULL;
 	
 	free(data->args);
 	free(data);

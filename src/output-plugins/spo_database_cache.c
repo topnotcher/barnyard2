@@ -534,12 +534,8 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 		else
 		{
 
-		    /* XXX */
-		    if(iArrayPtr != NULL)
-		    {
 			free(*iArrayPtr);
 			*iArrayPtr = NULL;
-		    }
                     mysql_free_result(data->m_result);
                     data->m_result = NULL;
                     LogMessage("[%s()]: No Classification found in database ... \n",
@@ -963,24 +959,17 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
     {
 	if( (ClassificationCacheUpdateDBid(dbClassArray,array_length,cacheHead)) )
 	{
-	    /* XXX */
-	    if( dbClassArray != NULL)
-	    {
 		free(dbClassArray);
 		dbClassArray = NULL;
 		array_length = 0;
-	    }
 	
 	    LogMessage("[%s()], Call to ClassificationCacheUpdateDBid() failed \n",
 		       __FUNCTION__);
 	    return 1;
 	}
 	
-	if(dbClassArray != NULL)
-	{
-	    free(dbClassArray);
-	    dbClassArray = NULL;
-	}
+	free(dbClassArray);
+	dbClassArray = NULL;
 	array_length = 0;
     }
     
